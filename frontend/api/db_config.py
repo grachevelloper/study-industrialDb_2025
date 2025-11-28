@@ -1,19 +1,14 @@
 import os
 from dataclasses import dataclass
-
+from pathlib import Path
 
 @dataclass
 class DatabaseConfig:
-    host: str = os.getenv("DB_HOST", "localhost")
-    port: int = int(os.getenv("DB_PORT", "5432"))
-    database: str = os.getenv("DB_NAME", "db_test1")
-    username: str = os.getenv("DB_USER", "postgres")
-    password: str = os.getenv("DB_PASSWORD", "zukozuko_2019A1")
-
+    database: str = os.getenv("DB_NAME", "cybersecurity.db")
+    
     @property
     def connection_string(self):
-        return f"postgresql://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+        db_path = Path(__file__).parent.parent / self.database
+        return f"sqlite:///{db_path}"
 
-
-# Создаем глобальный конфиг
 db_config = DatabaseConfig()

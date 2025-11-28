@@ -32,11 +32,9 @@ class Dashboard:
         actions_frame.columnconfigure(2, weight=1)
         actions_frame.rowconfigure(0, weight=1)
 
-        # Карточка 1: Создание таблицы
         self.create_action_card(actions_frame, 0, 0, "📊", "Initialize Database",
                                 "Create necessary tables in the database",
                                 self.initialize_database)
-
         # Карточка 2: Добавление атаки
         self.create_action_card(actions_frame, 0, 1, "➕", "Add New Attack",
                                 "Create and register a new DDoS attack",
@@ -59,16 +57,13 @@ class Dashboard:
         # Эмодзи
         ctk.CTkLabel(content, text=emoji, font=ctk.CTkFont(size=40)).pack(pady=(0, 15))
 
-        # Заголовок
         ctk.CTkLabel(content, text=title, font=ctk.CTkFont(size=18, weight="bold")).pack()
 
-        # Описание
         desc_label = ctk.CTkLabel(content, text=description,
                                   text_color=self.app.colors["text_muted"],
                                   wraplength=200, justify="center")
         desc_label.pack(pady=10)
 
-        # Кнопка
         ctk.CTkButton(content, text="Open", command=command,
                       fg_color=self.app.colors["primary"]).pack(side="bottom", pady=(15, 0))
 
@@ -77,9 +72,12 @@ class Dashboard:
         import threading
         def init_thread():
             try:
+                print("Starting database initialization...")  
                 result = self.app.api_client.initialize_database()
+                print(f"Initialization result: {result}")
                 self.app.window.after(0, lambda: self.app.show_success("Database initialized successfully!"))
             except Exception as e:
+                print(f"Initialization error: {e}") 
                 self.app.window.after(0, lambda: self.app.show_error(f"Failed to initialize database: {e}"))
 
         thread = threading.Thread(target=init_thread)

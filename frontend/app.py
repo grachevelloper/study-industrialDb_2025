@@ -7,6 +7,9 @@ from ui.dashboard import Dashboard
 from api.client import DDOSDatabaseClient
 import threading
 from tkinter import messagebox
+import uuid
+import json
+from datetime import datetime
 
 
 class DDoSAttackApp:
@@ -44,9 +47,6 @@ class DDoSAttackApp:
 
         self.current_edit_id = None
         self.setup_ui()
-
-        # Загружаем данные при запуске
-        self.refresh_attacks()
 
     def setup_ui(self):
         """Создание интерфейса с тремя вкладками"""
@@ -148,6 +148,30 @@ class DDoSAttackApp:
             self.show_error(f"Module not found: {e}")
         except Exception as e:
             self.show_error(f"Failed to load String Functions Tool: {e}")
+            
+    def show_subquery_filters(self):
+        """Показать окно фильтров с подзапросами"""
+        self.clear_content()
+        self.header.set_title("Subquery Filters")
+        try:
+            from ui.subquery_filters import SubqueryFilters
+            SubqueryFilters(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Subquery Filters: {e}")
+
+    def show_custom_types_manager(self):
+        """Показать менеджер пользовательских типов"""
+        self.clear_content()
+        self.header.set_title("Custom Types Manager")
+        try:
+            from ui.custom_types_manager import CustomTypesManager
+            CustomTypesManager(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Custom Types Manager: {e}")
 
     def show_join_wizard(self):
         """Показать мастер соединений JOIN"""
@@ -160,6 +184,23 @@ class DDoSAttackApp:
             self.show_error(f"Module not found: {e}")
         except Exception as e:
             self.show_error(f"Failed to load JOIN Wizard: {e}")
+
+    # МЕТОДЫ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЬСКИМИ ТИПАМИ (через api_client)
+    def create_custom_type(self, name, type_class, values):
+        """Создание пользовательского типа через API клиент"""
+        return self.api_client.create_custom_type(name, type_class, values)
+
+    def get_custom_types(self):
+        """Получение всех пользовательских типов через API клиент"""
+        return self.api_client.get_custom_types()
+
+    def delete_custom_type(self, type_id):
+        """Удаление пользовательского типа через API клиент"""
+        return self.api_client.delete_custom_type(type_id)
+
+    def execute_custom_query(self, query, params=()):
+        """Выполнение произвольного SQL запроса через API клиент"""
+        return self.api_client.execute_custom_query(query, params)
 
     def refresh_attacks(self):
         """Обновление списка атак с сервера"""
@@ -185,6 +226,30 @@ class DDoSAttackApp:
             self.sidebar.update_stats()
         if hasattr(self, 'header'):
             self.header.update_stats()
+
+    def show_regex_search_tool(self):
+        """Показать инструмент регулярных выражений"""
+        self.clear_content()
+        self.header.set_title("Advanced Text Search")
+        try:
+            from ui.regex_search_tool import RegexSearchTool
+            RegexSearchTool(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Regex Search Tool: {e}")
+
+    def show_aggregation_tool(self):
+        """Показать инструмент агрегирования"""
+        self.clear_content()
+        self.header.set_title("Aggregation Tool")
+        try:
+            from ui.aggregation_tool import AggregationTool
+            AggregationTool(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Aggregation Tool: {e}")
 
     def show_error(self, message):
         """Показ ошибки"""

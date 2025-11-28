@@ -21,7 +21,6 @@ class AlterTableManager:
             font=ctk.CTkFont(size=20, weight="bold")
         )
         title_label.pack(pady=(0, 20))
-
         # Создаем вкладки для разных операций
         tabview = ctk.CTkTabview(container)
         tabview.pack(fill="both", expand=True)
@@ -268,11 +267,10 @@ class AlterTableManager:
             cursor = conn.cursor()
 
             cursor.execute("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = %s 
-                ORDER BY ordinal_position
+                SELECT name FROM pragma_table_info(?)
+                ORDER BY cid
             """, (table_name,))
+
 
             columns = [row[0] for row in cursor.fetchall()]
             conn.close()
@@ -280,7 +278,7 @@ class AlterTableManager:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load columns: {e}")
             return []
-
+    
     def execute_add_column(self):
         """Выполнение добавления столбца"""
         table = self.add_col_table.get()

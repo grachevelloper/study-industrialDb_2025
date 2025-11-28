@@ -1,24 +1,19 @@
-import psycopg2
-import psycopg2.extras
+import sqlite3
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-import json
+from pathlib import Path
 from .db_config import db_config
-
 
 class DatabaseManager:
     def __init__(self, config=None):
         self.config = config or db_config
+        self.db_path = Path(__file__).parent.parent / self.config.database
 
     def get_connection(self):
-        """Получение соединения с PostgreSQL"""
-        conn = psycopg2.connect(
-            host=self.config.host,
-            port=self.config.port,
-            database=self.config.database,
-            user=self.config.username,
-            password=self.config.password
-        )
+        """Получение соединения с SQLite"""
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
         return conn
 
     def _parse_json_field(self, field_value):
@@ -34,7 +29,7 @@ class DatabaseManager:
             return []
 
     def initialize_database(self) -> Dict[str, Any]:
-        """Создание таблиц в PostgreSQL"""
+        """Создание таблиц в SQLite"""
         conn = None
         try:
             conn = self.get_connection()
@@ -43,32 +38,43 @@ class DatabaseManager:
             # Таблица атак
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS attacks (
-                    id VARCHAR(36) PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    frequency VARCHAR(50) NOT NULL,
-                    danger VARCHAR(50) NOT NULL,
-                    attack_type VARCHAR(50) NOT NULL,
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    frequency TEXT NOT NULL,
+                    danger TEXT NOT NULL,
+                    attack_type TEXT NOT NULL,
                     source_ips TEXT NOT NULL,
                     affected_ports TEXT NOT NULL,
                     mitigation_strategies TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    updated_at TIMESTAMP NOT NULL
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 )
             """)
 
             # Таблица целей
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS targets (
-                    id SERIAL PRIMARY KEY,
-                    attack_id VARCHAR(36) NOT NULL,
-                    target_ip VARCHAR(255),
-                    target_domain VARCHAR(255),
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    attack_id TEXT NOT NULL,
+                    target_ip TEXT,
+                    target_domain TEXT,
                     port INTEGER DEFAULT 80,
-                    protocol VARCHAR(50) DEFAULT 'tcp',
+                    protocol TEXT DEFAULT 'tcp',
                     tags TEXT,
                     FOREIGN KEY (attack_id) REFERENCES attacks (id) ON DELETE CASCADE
                 )
             """)
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS custom_types (
+                    id TEXT PRIMARY KEY,
+                    name TEXT UNIQUE,
+                    type TEXT,
+                    enum_values TEXT,
+                    created_at TEXT
+                )
+            """)
+
 
             conn.commit()
             return {"success": True, "message": "Database tables created successfully"}
@@ -86,21 +92,19 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
 
-            # Проверяем существование таблиц
             cursor.execute("""
-                SELECT table_name FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name IN ('attacks', 'targets')
+                SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name IN ('attacks', 'targets', 'custom_types')
             """)
             tables = cursor.fetchall()
 
-            tables_exist = len(tables) == 2
+            tables_exist = len(tables) == 3
 
             return {
                 "success": True,
                 "data": {
                     "tablesExist": tables_exist,
-                    "database": self.config.database,
+                    "database": str(self.db_path),
                     "tables": [table[0] for table in tables]
                 }
             }
@@ -118,56 +122,83 @@ class DatabaseManager:
         """Получение всех атак с целями"""
         conn = None
         try:
+            print("🔍 DEBUG: Connecting to database...")
             conn = self.get_connection()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cursor = conn.cursor()
 
             # Получаем все атаки
             cursor.execute("SELECT * FROM attacks ORDER BY created_at DESC")
             attacks_data = cursor.fetchall()
+            print(f"🔍 DEBUG: Found {len(attacks_data)} attacks")
 
             attacks = []
-            for attack_row in attacks_data:
-                attack = dict(attack_row)
+            for i, attack_row in enumerate(attacks_data):
+                print(f"🔍 DEBUG: Processing attack {i+1}")
+                try:
+                    attack = dict(attack_row)
+                    print(f"🔍 DEBUG: Attack keys: {list(attack.keys())}")
 
-                # Парсим JSON поля
-                attack["source_ips"] = self._parse_json_field(attack["source_ips"])
-                attack["affected_ports"] = self._parse_json_field(attack["affected_ports"])
-                attack["mitigation_strategies"] = self._parse_json_field(attack["mitigation_strategies"])
+                    # Детально отлаживаем каждое поле
+                    for key, value in attack.items():
+                        print(f"🔍 DEBUG: Field {key}: type={type(value)}, value={repr(value)}")
 
-                # Получаем цели для этой атаки
-                cursor.execute("SELECT * FROM targets WHERE attack_id = %s", (attack["id"],))
-                targets_data = cursor.fetchall()
+                    # Парсим JSON поля
+                    print("🔍 DEBUG: Parsing source_ips...")
+                    attack["source_ips"] = self._parse_json_field(attack["source_ips"])
+                    print("🔍 DEBUG: Parsing affected_ports...")
+                    attack["affected_ports"] = self._parse_json_field(attack["affected_ports"])
+                    print("🔍 DEBUG: Parsing mitigation_strategies...")
+                    attack["mitigation_strategies"] = self._parse_json_field(attack["mitigation_strategies"])
 
-                targets = []
-                for target_row in targets_data:
-                    target = dict(target_row)
-                    target["tags"] = self._parse_json_field(target["tags"])
-                    # Удаляем внутренний ID
-                    del target["id"]
-                    del target["attack_id"]
-                    targets.append(target)
+                    # Получаем цели для этой атаки
+                    cursor.execute("SELECT * FROM targets WHERE attack_id = ?", (attack["id"],))
+                    targets_data = cursor.fetchall()
+                    print(f"🔍 DEBUG: Found {len(targets_data)} targets for attack")
 
-                attack["targets"] = targets
-                attacks.append(attack)
+                    targets = []
+                    for j, target_row in enumerate(targets_data):
+                        print(f"🔍 DEBUG: Processing target {j+1}")
+                        target = dict(target_row)
+                        
+                        target["tags"] = self._parse_json_field(target["tags"])
+                        # Удаляем внутренний ID
+                        if "id" in target:
+                            del target["id"]
+                        if "attack_id" in target:
+                            del target["attack_id"]
+                        targets.append(target)
 
+                    attack["targets"] = targets
+                    attacks.append(attack)
+                    print(f"🔍 DEBUG: Successfully processed attack {i+1}")
+                    
+                except Exception as e:
+                    print(f"❌ DEBUG: Error processing attack {i+1}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+
+            print(f"🔍 DEBUG: Successfully processed {len(attacks)} attacks")
             return attacks
 
         except Exception as e:
-            print(f"Error fetching attacks: {e}")
+            print(f"❌ DEBUG: Error in get_all_attacks: {e}")
+            import traceback
+            traceback.print_exc()
             return []
         finally:
             if conn is not None:
                 conn.close()
-
+            
     def get_attack(self, attack_id: str) -> Optional[Dict[str, Any]]:
         """Получение конкретной атаки по ID"""
         conn = None
         try:
             conn = self.get_connection()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cursor = conn.cursor()
 
             # Получаем атаку
-            cursor.execute("SELECT * FROM attacks WHERE id = %s", (attack_id,))
+            cursor.execute("SELECT * FROM attacks WHERE id = ?", (attack_id,))
             attack_row = cursor.fetchone()
 
             if not attack_row:
@@ -181,7 +212,7 @@ class DatabaseManager:
             attack["mitigation_strategies"] = self._parse_json_field(attack["mitigation_strategies"])
 
             # Получаем цели
-            cursor.execute("SELECT * FROM targets WHERE attack_id = %s", (attack_id,))
+            cursor.execute("SELECT * FROM targets WHERE attack_id = ?", (attack_id,))
             targets_data = cursor.fetchall()
 
             targets = []
@@ -212,12 +243,8 @@ class DatabaseManager:
             # Подготавливаем данные для вставки
             attack_id = attack_data.get("id")
             if not attack_id:
-                # Импортируем здесь чтобы избежать циклических импортов
-                import sys
-                import os
-                sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                from utils.helpers import generate_id
-                attack_id = generate_id()
+                import uuid
+                attack_id = str(uuid.uuid4())
 
             current_time = datetime.now().isoformat()
 
@@ -225,16 +252,16 @@ class DatabaseManager:
             cursor.execute("""
                 INSERT INTO attacks 
                 (id, name, frequency, danger, attack_type, source_ips, affected_ports, mitigation_strategies, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 attack_id,
                 attack_data["name"],
                 attack_data["frequency"],
                 attack_data["danger"],
                 attack_data["attack_type"],
-                psycopg2.extras.Json(attack_data["source_ips"]),
-                psycopg2.extras.Json(attack_data["affected_ports"]),
-                psycopg2.extras.Json(attack_data["mitigation_strategies"]),
+                json.dumps(attack_data["source_ips"]),
+                json.dumps(attack_data["affected_ports"]),
+                json.dumps(attack_data["mitigation_strategies"]),
                 current_time,
                 current_time
             ))
@@ -244,14 +271,14 @@ class DatabaseManager:
                 cursor.execute("""
                     INSERT INTO targets 
                     (attack_id, target_ip, target_domain, port, protocol, tags)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     attack_id,
                     target_data.get("target_ip", ""),
                     target_data.get("target_domain", ""),
                     target_data.get("port", 80),
                     target_data.get("protocol", "tcp"),
-                    psycopg2.extras.Json(target_data.get("tags", []))
+                    json.dumps(target_data.get("tags", []))
                 ))
 
             conn.commit()
@@ -279,7 +306,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             # Проверяем существование атаки
-            cursor.execute("SELECT id FROM attacks WHERE id = %s", (attack_id,))
+            cursor.execute("SELECT id FROM attacks WHERE id = ?", (attack_id,))
             if not cursor.fetchone():
                 return {
                     "success": False,
@@ -291,17 +318,17 @@ class DatabaseManager:
             # Обновляем атаку
             cursor.execute("""
                 UPDATE attacks 
-                SET name = %s, frequency = %s, danger = %s, attack_type = %s, 
-                    source_ips = %s, affected_ports = %s, mitigation_strategies = %s, updated_at = %s
-                WHERE id = %s
+                SET name = ?, frequency = ?, danger = ?, attack_type = ?, 
+                    source_ips = ?, affected_ports = ?, mitigation_strategies = ?, updated_at = ?
+                WHERE id = ?
             """, (
                 attack_data["name"],
                 attack_data["frequency"],
                 attack_data["danger"],
                 attack_data["attack_type"],
-                psycopg2.extras.Json(attack_data["source_ips"]),
-                psycopg2.extras.Json(attack_data["affected_ports"]),
-                psycopg2.extras.Json(attack_data["mitigation_strategies"]),
+                json.dumps(attack_data["source_ips"]),
+                json.dumps(attack_data["affected_ports"]),
+                json.dumps(attack_data["mitigation_strategies"]),
                 current_time,
                 attack_id
             ))
@@ -331,7 +358,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             # Проверяем существование атаки
-            cursor.execute("SELECT id FROM attacks WHERE id = %s", (attack_id,))
+            cursor.execute("SELECT id FROM attacks WHERE id = ?", (attack_id,))
             if not cursor.fetchone():
                 return {
                     "success": False,
@@ -343,37 +370,37 @@ class DatabaseManager:
             # Обновляем атаку
             cursor.execute("""
                 UPDATE attacks 
-                SET name = %s, frequency = %s, danger = %s, attack_type = %s, 
-                    source_ips = %s, affected_ports = %s, mitigation_strategies = %s, updated_at = %s
-                WHERE id = %s
+                SET name = ?, frequency = ?, danger = ?, attack_type = ?, 
+                    source_ips = ?, affected_ports = ?, mitigation_strategies = ?, updated_at = ?
+                WHERE id = ?
             """, (
                 data["name"],
                 data["frequency"],
                 data["danger"],
                 data["attack_type"],
-                psycopg2.extras.Json(data["source_ips"]),
-                psycopg2.extras.Json(data["affected_ports"]),
-                psycopg2.extras.Json(data["mitigation_strategies"]),
+                json.dumps(data["source_ips"]),
+                json.dumps(data["affected_ports"]),
+                json.dumps(data["mitigation_strategies"]),
                 current_time,
                 attack_id
             ))
 
             # Удаляем старые цели
-            cursor.execute("DELETE FROM targets WHERE attack_id = %s", (attack_id,))
+            cursor.execute("DELETE FROM targets WHERE attack_id = ?", (attack_id,))
 
             # Добавляем новые цели
             for target_data in data.get("targets", []):
                 cursor.execute("""
                     INSERT INTO targets 
                     (attack_id, target_ip, target_domain, port, protocol, tags)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     attack_id,
                     target_data.get("target_ip", ""),
                     target_data.get("target_domain", ""),
                     target_data.get("port", 80),
                     target_data.get("protocol", "tcp"),
-                    psycopg2.extras.Json(target_data.get("tags", []))
+                    json.dumps(target_data.get("tags", []))
                 ))
 
             conn.commit()
@@ -401,7 +428,7 @@ class DatabaseManager:
             cursor = conn.cursor()
 
             # Проверяем существование атаки
-            cursor.execute("SELECT id FROM attacks WHERE id = %s", (attack_id,))
+            cursor.execute("SELECT id FROM attacks WHERE id = ?", (attack_id,))
             if not cursor.fetchone():
                 return {
                     "success": False,
@@ -409,7 +436,7 @@ class DatabaseManager:
                 }
 
             # Удаляем атаку (цели удалятся каскадно)
-            cursor.execute("DELETE FROM attacks WHERE id = %s", (attack_id,))
+            cursor.execute("DELETE FROM attacks WHERE id = ?", (attack_id,))
             conn.commit()
 
             return {
@@ -432,7 +459,7 @@ class DatabaseManager:
         conn = None
         try:
             conn = self.get_connection()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+            cursor = conn.cursor()
 
             # Базовый запрос
             query = """
@@ -443,17 +470,17 @@ class DatabaseManager:
 
             # Добавляем условия фильтрации
             if frequencies:
-                placeholders = ",".join(["%s"] * len(frequencies))
+                placeholders = ",".join(["?"] * len(frequencies))
                 query += f" AND a.frequency IN ({placeholders})"
                 params.extend(frequencies)
 
             if danger_levels:
-                placeholders = ",".join(["%s"] * len(danger_levels))
+                placeholders = ",".join(["?"] * len(danger_levels))
                 query += f" AND a.danger IN ({placeholders})"
                 params.extend(danger_levels)
 
             if attack_types:
-                placeholders = ",".join(["%s"] * len(attack_types))
+                placeholders = ",".join(["?"] * len(attack_types))
                 query += f" AND a.attack_type IN ({placeholders})"
                 params.extend(attack_types)
 
@@ -464,7 +491,7 @@ class DatabaseManager:
                         SELECT 1 FROM targets t 
                         WHERE t.attack_id = a.id AND t.protocol IN ({})
                     )
-                """.format(",".join(["%s"] * len(protocols)))
+                """.format(",".join(["?"] * len(protocols)))
                 params.extend(protocols)
 
             query += " ORDER BY a.created_at DESC"
@@ -495,9 +522,9 @@ class DatabaseManager:
             conn = self.get_connection()
             cursor = conn.cursor()
 
-            # Удаляем таблицы (в правильном порядке из-за foreign keys)
-            cursor.execute("DROP TABLE IF EXISTS targets CASCADE")
-            cursor.execute("DROP TABLE IF EXISTS attacks CASCADE")
+            # Удаляем таблицы
+            cursor.execute("DROP TABLE IF EXISTS targets")
+            cursor.execute("DROP TABLE IF EXISTS attacks")
 
             conn.commit()
 

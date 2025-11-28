@@ -38,22 +38,54 @@ class Sidebar:
         nav_frame = ctk.CTkFrame(parent, fg_color="transparent")
         nav_frame.pack(fill="x", padx=15, pady=20)
 
-        # Кнопки навигации
-        nav_buttons = [
+        main_nav_buttons = [
             ("🏠 Main Dashboard", self.app.show_dashboard),
             ("➕ Add Attack", self.app.show_attack_form),
             ("📋 View Table", self.app.show_attacks_list),
-            ("🔧 DB Structure", self.app.show_alter_table_manager),
-            ("🔍 Query Builder", self.app.show_advanced_query_builder),
-            ("📖 Text Search", self.app.show_text_search_tool)
         ]
 
-        for text, command in nav_buttons:
+        for text, command in main_nav_buttons:
             btn = ctk.CTkButton(nav_frame, text=text, command=command,
                                 fg_color="transparent", hover_color="#2a2a4a",
                                 anchor="w", font=ctk.CTkFont(size=14),
                                 height=40)
-            btn.pack(fill="x", pady=5)
+            btn.pack(fill="x", pady=2)
+
+        separator = ctk.CTkFrame(nav_frame, height=1, fg_color="#3a3a5a")
+        separator.pack(fill="x", pady=10)
+
+        advanced_nav_buttons = [
+            ("🔧 DB Structure", self.app.show_alter_table_manager),
+            ("🔍 Query Builder", self.app.show_advanced_query_builder),
+            ("📖 Text Search", self.app.show_text_search_tool),
+            ("🔄 String Functions", self.app.show_string_functions_tool),
+            ("🔗 JOIN Wizard", self.app.show_join_wizard),
+            # ⭐⭐⭐ ДОБАВЬТЕ ЭТИ ДВЕ НОВЫЕ КНОПКИ ⭐⭐⭐
+            ("🔍 Regex Search", self.app.show_regex_search_tool),
+            ("📊 Aggregation", self.app.show_aggregation_tool),
+        ]
+
+        for text, command in advanced_nav_buttons:
+            btn = ctk.CTkButton(nav_frame, text=text, command=command,
+                                fg_color="transparent", hover_color="#2a2a4a",
+                                anchor="w", font=ctk.CTkFont(size=14),
+                                height=40)
+            btn.pack(fill="x", pady=2)
+
+        separator2 = ctk.CTkFrame(nav_frame, height=1, fg_color="#3a3a5a")
+        separator2.pack(fill="x", pady=10)
+
+        new_nav_buttons = [
+            ("🎛️ Subquery Filters", self.app.show_subquery_filters),
+            ("🎨 Custom Types", self.app.show_custom_types_manager),
+        ]
+
+        for text, command in new_nav_buttons:
+            btn = ctk.CTkButton(nav_frame, text=text, command=command,
+                                fg_color="transparent", hover_color="#2a2a4a",
+                                anchor="w", font=ctk.CTkFont(size=14),
+                                height=40)
+            btn.pack(fill="x", pady=2)
 
     def create_stats_section(self, parent):
         """Создание секции статистики"""
@@ -61,12 +93,12 @@ class Sidebar:
         stats_frame.pack(fill="x", padx=15, pady=20)
 
         ctk.CTkLabel(stats_frame, text="Quick Stats",
-                     font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
+                    font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
 
         self.stats_label = ctk.CTkLabel(stats_frame, text="Loading...", justify="left",
                                         font=ctk.CTkFont(size=12))
         self.stats_label.pack(anchor="w", padx=15, pady=(0, 10))
-
+        
     def update_stats(self):
         """Обновление статистики"""
         total_attacks = len(self.app.attacks)
