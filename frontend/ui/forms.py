@@ -19,14 +19,15 @@ class AttackForm:
     def __init__(self, parent, app):
         self.app = app
         self.target_fields = []
+        self.additional_fields = {}  # Словарь для хранения дополнительных полей
         self.setup_ui(parent)
+        self.load_additional_columns()  # Загружаем дополнительные колонки
 
     def setup_ui(self, parent):
         """Создание формы ввода"""
         form_container = ctk.CTkScrollableFrame(parent, fg_color="transparent")
         form_container.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Основная информация
         self.create_basic_info_section(form_container)
 
         # Источники и порты
@@ -38,11 +39,119 @@ class AttackForm:
         # Стратегии защиты
         self.create_mitigation_section(form_container)
 
+        # Дополнительные поля (будут созданы динамически)
+        self.additional_fields_container = ctk.CTkFrame(form_container, fg_color="transparent")
+        self.additional_fields_container.pack(fill="x", padx=5, pady=8)
+
         # Кнопка создания
         self.create_action_button(form_container)
 
         # Добавляем первую цель по умолчанию
         self.add_target_field()
+
+    def load_additional_columns(self):
+        """Загрузка дополнительных колонок из структуры таблицы"""
+        try:
+            conn = self.app.api_client.db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("PRAGMA table_info(attacks)")
+            columns_info = cursor.fetchall()
+            conn.close()
+            
+            base_columns_set = {
+                'id', 'name', 'frequency', 'danger', 'attack_type', 
+                'source_ips', 'affected_ports', 'targets', 'created_at',
+                'mitigation_strategies', "updated_at"
+            }
+            
+            # Ищем дополнительные колонки
+            additional_columns = []
+            for col_info in columns_info:
+                col_name = col_info[1]
+                col_type = col_info[2].upper()
+                if col_name not in base_columns_set:
+                    additional_columns.append((col_name, col_type))
+            
+            # Создаем поля для дополнительных колонок
+            self.create_additional_fields(additional_columns)
+            
+        except Exception as e:
+            print(f"Error loading additional columns: {e}")
+
+    def create_additional_fields(self, additional_columns):
+        """Создание полей для дополнительных колонок"""
+        if not additional_columns:
+            return
+
+        # Создаем карточку для дополнительных полей
+        card = self.create_card(self.additional_fields_container, "📊 Additional Fields")
+        
+        grid = ctk.CTkFrame(card, fg_color="transparent")
+        grid.pack(fill="x", padx=15, pady=15)
+
+        self.additional_fields = {}  # Очищаем словарь
+
+        for i, (col_name, col_type) in enumerate(additional_columns):
+            row = i % 3  # 3 колонки в ряду
+            col = i // 3
+
+            # Создаем фрейм для поля если нужно
+            if row == 0:
+                field_row = ctk.CTkFrame(grid, fg_color="transparent")
+                field_row.pack(fill="x", pady=5)
+
+            # Название поля
+            label = ctk.CTkLabel(field_row, text=f"{col_name}:", font=ctk.CTkFont(weight="bold"))
+            label.pack(side="left", padx=(20 if row > 0 else 0, 5), pady=5)
+
+            # Создаем поле ввода в зависимости от типа
+            field = self.create_field_by_type(field_row, col_type, col_name)
+            field.pack(side="left", padx=5, pady=5, fill="x", expand=True)
+
+            # Сохраняем поле в словарь
+            self.additional_fields[col_name] = {
+                'widget': field,
+                'type': col_type,
+                'label': label
+            }
+
+    def create_field_by_type(self, parent, col_type, col_name):
+        """Создание поля ввода в зависимости от типа колонки"""
+        col_type_upper = col_type.upper()
+        
+        # Определяем тип поля по типу колонки в БД
+        if any(text_type in col_type_upper for text_type in ['VARCHAR', 'TEXT', 'CHAR']):
+            # Текстовые поля
+            if '255' in col_type or 'TEXT' in col_type_upper:
+                return ctk.CTkEntry(parent, placeholder_text=f"Enter {col_name}...", width=200)
+            else:
+                return ctk.CTkEntry(parent, placeholder_text=f"Enter {col_name}...", width=200)
+                
+        elif any(num_type in col_type_upper for num_type in ['INT', 'INTEGER', 'BIGINT', 'SMALLINT']):
+            # Числовые поля
+            return ctk.CTkEntry(parent, placeholder_text=f"Enter number...", width=120)
+            
+        elif 'BOOLEAN' in col_type_upper or 'BOOL' in col_type_upper:
+            # Булевы значения
+            var = ctk.BooleanVar()
+            return ctk.CTkCheckBox(parent, text="", variable=var, width=30)
+            
+        elif any(float_type in col_type_upper for float_type in ['FLOAT', 'DOUBLE', 'DECIMAL', 'REAL']):
+            # Числа с плавающей точкой
+            return ctk.CTkEntry(parent, placeholder_text=f"Enter decimal...", width=120)
+            
+        elif 'JSON' in col_type_upper:
+            # JSON поля
+            return ctk.CTkEntry(parent, placeholder_text='{"key": "value"}', width=200)
+            
+        elif 'DATE' in col_type_upper or 'TIME' in col_type_upper:
+            # Дата/время
+            return ctk.CTkEntry(parent, placeholder_text="YYYY-MM-DD", width=120)
+            
+        else:
+            # По умолчанию текстовое поле
+            return ctk.CTkEntry(parent, placeholder_text=f"Enter {col_name}...", width=200)
 
     def create_basic_info_section(self, parent):
         """Секция основной информации с ограниченными типами"""
@@ -242,6 +351,47 @@ class AttackForm:
 
         self.target_fields.append(target_data)
 
+    def get_additional_fields_data(self):
+        """Получение данных из дополнительных полей"""
+        additional_data = {}
+        
+        for col_name, field_info in self.additional_fields.items():
+            widget = field_info['widget']
+            field_type = field_info['type'].upper()
+            
+            if isinstance(widget, ctk.CTkEntry):
+                value = widget.get().strip()
+                
+                
+                if not value:
+                    continue  
+                if any(num_type in field_type for num_type in ['INT', 'INTEGER', 'BIGINT', 'SMALLINT']):
+                    if value.isdigit():
+                        additional_data[col_name] = int(value)
+                    elif value:
+                        additional_data[col_name] = 0  # Значение по умолчанию для чисел
+                    else:
+                        additional_data[col_name] = None
+                        
+                elif any(float_type in field_type for float_type in ['FLOAT', 'DOUBLE', 'DECIMAL', 'REAL']):
+                    try:
+                        additional_data[col_name] = float(value) if value else None
+                    except ValueError:
+                        additional_data[col_name] = 0.0
+                        
+                elif 'BOOLEAN' in field_type or 'BOOL' in field_type:
+                    additional_data[col_name] = bool(value) if value else False
+                    
+                else:
+                    # Текстовые и другие типы
+                    additional_data[col_name] = value if value else None
+                    
+            elif isinstance(widget, ctk.CTkCheckBox):
+                # Для чекбоксов получаем значение переменной
+                additional_data[col_name] = widget.get()
+                
+        return additional_data
+
     def validate_name_field(self, event):
         """Валидация поля имени в реальном времени"""
         name = self.name_entry.get().strip()
@@ -410,6 +560,9 @@ class AttackForm:
                 mitigation_strategies = [strat.strip() for strat in
                                          self.mitigation_text.get("1.0", "end-1c").split("\n") if strat.strip()]
                 targets = self.get_targets_data()
+                
+                # Получаем данные из дополнительных полей
+                additional_data = self.get_additional_fields_data()
 
                 # Подготовка данных для API
                 attack_data = {
@@ -422,6 +575,9 @@ class AttackForm:
                     "mitigation_strategies": mitigation_strategies,
                     "targets": [target.__dict__ for target in targets]
                 }
+                
+                # Добавляем данные из дополнительных полей
+                attack_data.update(additional_data)
 
                 # Отправка на сервер
                 result = self.app.api_client.create_attack(attack_data)
@@ -469,3 +625,10 @@ class AttackForm:
             target_data['frame'].destroy()
         self.target_fields = []
         self.add_target_field()
+        
+        for field_info in self.additional_fields.values():
+            widget = field_info['widget']
+            if isinstance(widget, ctk.CTkEntry):
+                widget.delete(0, "end")
+            elif isinstance(widget, ctk.CTkCheckBox):
+                widget.deselect()

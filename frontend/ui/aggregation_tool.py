@@ -9,6 +9,7 @@ class AggregationTool:
         self.aggregate_functions = []
         self.group_by_columns = []
         self.having_conditions = []
+        self.where_conditions = []
         self.case_expressions = []
         self.null_functions = []
 
@@ -32,6 +33,7 @@ class AggregationTool:
         title_label.pack(pady=(0, 20))
 
         self.create_query_settings(main_scrollable)
+        self.create_where_section(main_scrollable)
         self.create_case_section(main_scrollable)
         self.create_null_functions_section(main_scrollable)
         self.create_aggregation_section(main_scrollable)
@@ -47,6 +49,54 @@ class AggregationTool:
                 self.on_table_selected("attacks")
         except Exception as e:
             print(f"Error loading initial data: {e}")
+    
+    def add_where_condition(self):
+        column = self.where_column_combo.get()
+        operator = self.where_operator_combo.get()
+        value = self.where_value_entry.get().strip()
+
+        if not column:
+            messagebox.showwarning("Warning", "Please select a column")
+            return
+
+        # For IS NULL/IS NOT NULL, don't require value
+        if operator in ["IS NULL", "IS NOT NULL"]:
+            condition = f"{column} {operator}"
+        else:
+            if not value:
+                messagebox.showwarning("Warning", "Please enter a value")
+                return
+            
+            # Add quotes for string values (simple heuristic)
+            if operator.upper() != "IN" and not value.replace('.', '').isdigit():
+                value = f"'{value}'"
+            
+            condition = f"{column} {operator} {value}"
+
+        self.where_conditions.append(condition)
+        self.update_where_list()
+
+        # Clear value field
+        self.where_value_entry.delete(0, 'end')
+
+    def update_where_list(self):
+        for widget in self.where_list_frame.winfo_children():
+            widget.destroy()
+
+        for i, condition in enumerate(self.where_conditions):
+            frame = ctk.CTkFrame(self.where_list_frame, height=25)
+            frame.pack(fill="x", pady=1)
+
+            ctk.CTkLabel(frame, text=condition).pack(side="left", padx=5)
+
+            ctk.CTkButton(
+                frame, text="❌", width=30, height=20,
+                command=lambda idx=i: self.remove_where_condition(idx)
+            ).pack(side="right", padx=2)
+
+    def remove_where_condition(self, index):
+        self.where_conditions.pop(index)
+        self.update_where_list()
 
     def create_query_settings(self, parent):
         settings_frame = ctk.CTkFrame(parent)
@@ -132,6 +182,48 @@ class AggregationTool:
                      font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
         self.case_list_frame = ctk.CTkScrollableFrame(case_frame, height=100)
         self.case_list_frame.pack(fill="x", padx=15, pady=(0, 10))
+    
+    def create_where_section(self, parent):
+        where_frame = ctk.CTkFrame(parent)
+        where_frame.pack(fill="x", pady=10)
+
+        ctk.CTkLabel(where_frame, text="WHERE Conditions",
+                    font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=10)
+
+        # Controls for adding WHERE conditions
+        controls_frame = ctk.CTkFrame(where_frame, fg_color="transparent")
+        controls_frame.pack(fill="x", padx=15, pady=5)
+
+        # Column selection
+        ctk.CTkLabel(controls_frame, text="Column:").pack(side="left")
+        self.where_column_combo = ctk.CTkComboBox(controls_frame, values=[], width=120)
+        self.where_column_combo.pack(side="left", padx=(10, 5))
+
+        # Operator selection
+        ctk.CTkLabel(controls_frame, text="Operator:").pack(side="left")
+        self.where_operator_combo = ctk.CTkComboBox(controls_frame,
+                                                values=["=", "!=", ">", "<", ">=", "<=", "LIKE", "IN", "IS NULL", "IS NOT NULL"],
+                                                width=100)
+        self.where_operator_combo.pack(side="left", padx=(10, 5))
+        self.where_operator_combo.set("=")
+
+        # Value entry
+        ctk.CTkLabel(controls_frame, text="Value:").pack(side="left")
+        self.where_value_entry = ctk.CTkEntry(controls_frame, placeholder_text="value", width=120)
+        self.where_value_entry.pack(side="left", padx=(10, 5))
+
+        # Add WHERE button
+        ctk.CTkButton(controls_frame, text="Add WHERE",
+                    command=self.add_where_condition).pack(side="left", padx=(10, 0))
+
+        # List of current WHERE conditions
+        ctk.CTkLabel(where_frame, text="Current WHERE Conditions:",
+                    font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
+        self.where_list_frame = ctk.CTkScrollableFrame(where_frame, height=80)
+        self.where_list_frame.pack(fill="x", padx=15, pady=(0, 10))
+
+        # Initialize WHERE conditions list
+        self.where_conditions = []
 
     def create_null_functions_section(self, parent):
         null_frame = ctk.CTkFrame(parent)
@@ -318,7 +410,7 @@ class AggregationTool:
             columns = [col['name'] for col in schema]
 
             # Update all column comboboxes
-            for combo_attr in ['agg_column_combo', 'group_column_combo', 'case_column_combo',
+            for combo_attr in ['agg_column_combo', 'group_column_combo', 'case_column_combo', 'where_column_combo',
                                'coalesce_column_combo', 'nullif_column_combo']:
                 combo = getattr(self, combo_attr, None)
                 if combo:
@@ -692,6 +784,11 @@ class AggregationTool:
 
         select_clause = ", ".join(select_parts) if select_parts else "*"
 
+        # WHERE clause - ДОБАВЛЕНО
+        where_clause = ""
+        if hasattr(self, 'where_conditions') and self.where_conditions:
+            where_clause = f"WHERE {' AND '.join(self.where_conditions)}"
+
         group_clause = ""
         if self.group_by_columns:
             group_clause = f"GROUP BY {', '.join(self.group_by_columns)}"
@@ -701,6 +798,10 @@ class AggregationTool:
             having_clause = f"HAVING {' AND '.join(self.having_conditions)}"
 
         sql = f"SELECT {select_clause} FROM {table}"
+        
+        # ДОБАВЛЕНО WHERE в правильную последовательность
+        if where_clause:
+            sql += f" {where_clause}"
         if group_clause:
             sql += f" {group_clause}"
         if having_clause:
@@ -721,7 +822,7 @@ class AggregationTool:
 
         except Exception as e:
             messagebox.showerror("Error", f"Aggregation failed: {e}")
-
+            
     def show_sql(self):
         sql = self.build_sql_query()
 
@@ -747,6 +848,7 @@ class AggregationTool:
         self.having_conditions = []
         self.case_expressions = []
         self.null_functions = []
+        self.where_conditions = []
 
         if hasattr(self, 'current_case_conditions'):
             self.current_case_conditions = []

@@ -7,6 +7,7 @@ from api.client import DDOSDatabaseClient
 class AlterTableManager:
     def __init__(self, parent, app):
         self.app = app
+        self.parent = parent
         self.setup_ui(parent)
 
     def setup_ui(self, parent):
@@ -21,15 +22,14 @@ class AlterTableManager:
             font=ctk.CTkFont(size=20, weight="bold")
         )
         title_label.pack(pady=(0, 20))
+        
         # Создаем вкладки для разных операций
         tabview = ctk.CTkTabview(container)
         tabview.pack(fill="both", expand=True)
 
-        # Вкладка добавления столбцов
         tabview.add("Add Column")
         self.create_add_column_tab(tabview.tab("Add Column"))
 
-        # Вкладка удаления столбцов
         tabview.add("Drop Column")
         self.create_drop_column_tab(tabview.tab("Drop Column"))
 
@@ -46,8 +46,7 @@ class AlterTableManager:
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkLabel(frame, text="Add New Column", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w",
-                                                                                                  pady=(0, 15))
+        ctk.CTkLabel(frame, text="Add New Column", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 15))
 
         # Выбор таблицы
         table_frame = ctk.CTkFrame(frame, fg_color="transparent")
@@ -57,25 +56,35 @@ class AlterTableManager:
         self.add_col_table.pack(side="left", padx=(10, 0))
         self.add_col_table.set("attacks")
 
-        # Имя столбца
         name_frame = ctk.CTkFrame(frame, fg_color="transparent")
         name_frame.pack(fill="x", pady=5)
         ctk.CTkLabel(name_frame, text="Column Name:").pack(side="left")
         self.column_name = ctk.CTkEntry(name_frame, placeholder_text="new_column_name")
         self.column_name.pack(side="left", padx=(10, 0), fill="x", expand=True)
 
-        # Тип данных
         type_frame = ctk.CTkFrame(frame, fg_color="transparent")
         type_frame.pack(fill="x", pady=5)
         ctk.CTkLabel(type_frame, text="Data Type:").pack(side="left")
-        self.data_type = ctk.CTkComboBox(type_frame, values=[
+        
+        # Базовые типы данных
+        base_types = [
             "VARCHAR(255)", "TEXT", "INTEGER", "BIGINT", "BOOLEAN",
             "TIMESTAMP", "DATE", "FLOAT", "JSONB"
-        ], width=150)
+        ]
+        
+        self.data_type = ctk.CTkComboBox(type_frame, values=base_types, width=150)
         self.data_type.pack(side="left", padx=(10, 0))
         self.data_type.set("VARCHAR(255)")
 
-        # Ограничения
+        # Кнопка для выбора пользовательских типов
+        custom_type_btn = ctk.CTkButton(
+            type_frame, 
+            text="Custom Types", 
+            width=100,
+            command=self.show_custom_types
+        )
+        custom_type_btn.pack(side="left", padx=(10, 0))
+
         constraints_frame = ctk.CTkFrame(frame, fg_color="transparent")
         constraints_frame.pack(fill="x", pady=5)
         ctk.CTkLabel(constraints_frame, text="Constraints:").pack(side="left")
@@ -86,7 +95,6 @@ class AlterTableManager:
         ctk.CTkCheckBox(constraints_frame, text="NOT NULL", variable=self.not_null_var).pack(side="left", padx=(10, 5))
         ctk.CTkCheckBox(constraints_frame, text="UNIQUE", variable=self.unique_var).pack(side="left", padx=5)
 
-        # Значение по умолчанию
         default_frame = ctk.CTkFrame(frame, fg_color="transparent")
         default_frame.pack(fill="x", pady=5)
         ctk.CTkLabel(default_frame, text="Default Value:").pack(side="left")
@@ -100,6 +108,24 @@ class AlterTableManager:
             command=self.execute_add_column,
             fg_color=self.app.colors["success"]
         ).pack(pady=15)
+
+    def show_custom_types(self):
+        """Показать диалог выбора пользовательских типов"""
+        try:
+            custom_types = self.app.api_client.get_custom_types()
+            if not custom_types:
+                messagebox.showinfo("Info", "No custom types available")
+                return
+
+            dialog = CustomTypeSelectionDialog(self.parent, self.app, custom_types)
+            self.app.window.wait_window(dialog)
+            
+            if dialog.selected_type:
+                # Обновляем выбранный тип данных
+                self.data_type.set(dialog.selected_type)
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load custom types: {e}")
 
     def create_drop_column_tab(self, parent):
         """Вкладка удаления столбцов"""
@@ -149,8 +175,7 @@ class AlterTableManager:
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkLabel(frame, text="Rename Objects", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w",
-                                                                                                  pady=(0, 15))
+        ctk.CTkLabel(frame, text="Rename Objects", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 15))
 
         # Переименование таблицы
         ctk.CTkLabel(frame, text="Rename Table:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 5))
@@ -211,8 +236,7 @@ class AlterTableManager:
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        ctk.CTkLabel(frame, text="Manage Constraints", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w",
-                                                                                                      pady=(0, 15))
+        ctk.CTkLabel(frame, text="Manage Constraints", font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 15))
 
         # Добавление ограничений
         ctk.CTkLabel(frame, text="Add Constraint:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 5))
@@ -271,7 +295,6 @@ class AlterTableManager:
                 ORDER BY cid
             """, (table_name,))
 
-
             columns = [row[0] for row in cursor.fetchall()]
             conn.close()
             return columns
@@ -301,12 +324,22 @@ class AlterTableManager:
         # Добавляем значение по умолчанию
         default_val = self.default_value.get().strip()
         if default_val:
-            if data_type.upper() in ['VARCHAR', 'TEXT']:
+            # Для пользовательских типов и текстовых значений используем кавычки
+            if any(keyword in data_type.upper() for keyword in ['VARCHAR', 'TEXT', 'CHAR']) or self.is_custom_type(data_type):
                 sql += f" DEFAULT '{default_val}'"
             else:
                 sql += f" DEFAULT {default_val}"
 
         self.execute_sql_transaction(sql, f"Column '{column}' added successfully")
+
+    def is_custom_type(self, data_type):
+        """Проверяет, является ли тип пользовательским"""
+        try:
+            custom_types = self.app.api_client.get_custom_types()
+            custom_type_names = [t['name'] for t in custom_types]
+            return data_type in custom_type_names
+        except:
+            return False
 
     def execute_drop_column(self):
         """Выполнение удаления столбца"""
@@ -398,3 +431,68 @@ class AlterTableManager:
         thread = threading.Thread(target=execute_thread)
         thread.daemon = True
         thread.start()
+
+
+class CustomTypeSelectionDialog(ctk.CTkToplevel):
+    def __init__(self, parent, app, custom_types):
+        super().__init__(parent)
+        self.app = app
+        self.custom_types = custom_types
+        self.selected_type = None
+        self.title("Select Custom Type")
+        self.geometry("400x300")
+        self.setup_ui()
+
+    def setup_ui(self):
+        """Настройка интерфейса выбора типа"""
+        main_frame = ctk.CTkFrame(self)
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(main_frame, text="Select Custom Type", 
+                    font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(0, 15))
+
+        # Список типов
+        self.types_tree = ttk.Treeview(main_frame, columns=("Type", "Values"), show="headings", height=10)
+        self.types_tree.heading("Type", text="Type Name")
+        self.types_tree.heading("Values", text="Values/Fields")
+        self.types_tree.column("Type", width=150)
+        self.types_tree.column("Values", width=200)
+        
+        # Добавляем типы в список
+        for type_data in self.custom_types:
+            values_text = str(type_data['values'])[:50] + "..." if len(str(type_data['values'])) > 50 else str(type_data['values'])
+            self.types_tree.insert("", "end", values=(type_data['name'], values_text))
+
+        self.types_tree.pack(fill="both", expand=True, pady=(0, 15))
+        
+        # Двойной клик для выбора
+        self.types_tree.bind("<Double-1>", self.on_type_select)
+
+        # Кнопки
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        button_frame.pack(fill="x")
+
+        ctk.CTkButton(
+            button_frame, 
+            text="Select", 
+            command=self.on_select,
+            fg_color=self.app.colors["success"]
+        ).pack(side="right", padx=5)
+        
+        ctk.CTkButton(
+            button_frame, 
+            text="Cancel", 
+            command=self.destroy
+        ).pack(side="right", padx=5)
+
+    def on_type_select(self, event):
+        """Обработка выбора типа двойным кликом"""
+        self.on_select()
+
+    def on_select(self):
+        """Обработка выбора типа"""
+        selection = self.types_tree.selection()
+        if selection:
+            item = self.types_tree.item(selection[0])
+            self.selected_type = item['values'][0]
+            self.destroy()
