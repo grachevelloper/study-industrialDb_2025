@@ -358,7 +358,6 @@ class SubqueryDialog(ctk.CTkToplevel):
         self.value_entry = ctk.CTkEntry(main_frame, placeholder_text="Enter value...")
         self.value_entry.pack(fill="x", pady=(0, 20))
 
-        # Кнопки
         button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         button_frame.pack(fill="x")
 
