@@ -259,6 +259,81 @@ class DDoSAttackApp:
         """Показ успеха"""
         messagebox.showinfo("Success", message)
 
+    def show_grouping_tool(self):
+        """Показать инструмент группировки"""
+        self.clear_content()
+        self.header.set_title("Grouping Tool")
+        try:
+            from ui.grouping_tool import GroupingTool
+            GroupingTool(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Grouping Tool: {e}")
+
+    def show_view_manager(self):
+        """Показать менеджер представлений"""
+        self.clear_content()
+        self.header.set_title("View Manager")
+        try:
+            from ui.view_manager import ViewManager
+            ViewManager(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load View Manager: {e}")
+
+    def show_materialized_view_manager(self):
+        """Показать менеджер материализованных представлений"""
+        self.clear_content()
+        self.header.set_title("Materialized View Manager")
+        try:
+            from ui.materialized_view_manager import MaterializedViewManager
+            MaterializedViewManager(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Materialized View Manager: {e}")
+
+    def show_cte_builder(self):
+        """Показать конструктор CTE"""
+        self.clear_content()
+        self.header.set_title("CTE (Common Table Expressions) Builder")
+        try:
+            from ui.cte_builder import CTEBuilder
+            CTEBuilder(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load CTE Builder: {e}")
+
+    def create_schema(self):
+        """Создать схему БД"""
+        self.clear_content()
+        self.header.set_title("Create Database Schema")
+        try:
+            from ui.schema_creator import SchemaCreator
+            SchemaCreator(self.content_frame, self)
+        except ImportError as e:
+            self.show_error(f"Module not found: {e}")
+        except Exception as e:
+            self.show_error(f"Failed to load Schema Creator: {e}")
+
+    def show_database_stats(self):
+        """Показать статистику БД"""
+        # Реализация просмотра статистики БД
+        pass
+
+    def show_logs(self):
+        """Показать логи"""
+        # Реализация просмотра логов
+        pass
+
+    def show_settings(self):
+        """Показать настройки"""
+        # Реализация настроек
+        pass
+
     def run(self):
         """Запуск приложения"""
         self.window.mainloop()

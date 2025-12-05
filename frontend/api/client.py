@@ -247,3 +247,22 @@ class DDOSDatabaseClient:
         except Exception as e:
             print(f"Error getting tables: {e}")
             return []
+        
+    def get_database_info(self):
+        """Получить информацию о базе данных"""
+        try:
+            # Используем метод из обновленного db_manager
+            return self.db_manager.get_database_info()
+        except Exception as e:
+            # Возвращаем базовую информацию при ошибке
+            return {
+                'name': 'attacks.db',
+                'size_mb': 0,
+                'table_count': 0,
+                'view_count': 0,
+                'materialized_view_count': 0,
+                'cte_count': 0,
+                'attack_count': 0,
+                'target_count': 0,
+                'last_updated': datetime.now().isoformat()
+            }
