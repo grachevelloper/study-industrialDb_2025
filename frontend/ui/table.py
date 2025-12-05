@@ -133,7 +133,7 @@ class AttackTable:
         self.status_label.pack(side="left")
 
     def create_table(self, parent):
-        """Создание стилизованной таблицы"""
+        """Создание стилизованной таблицы с динамическими колонками"""
         # Кастомный стиль для таблицы
         style = ttk.Style()
         style.theme_use("default")
@@ -160,9 +160,16 @@ class AttackTable:
                   background=[('selected', '#1f6aa5')],
                   foreground=[('selected', 'white')])
 
-        # Создание таблицы БЕЗ колонки Actions
-        columns = ("Name", "Frequency", "Danger", "Type", "Source IPs", "Ports", "Targets", "Created")
-        self.tree = ttk.Treeview(parent, columns=columns, show="headings", style="Custom.Treeview")
+        # Базовые колонки + динамические
+        base_columns = ("Name", "Frequency", "Danger", "Type", "Source IPs", "Ports", "Targets", "Created")
+        
+        # Получаем дополнительные колонки из структуры таблицы
+        additional_columns = self.get_additional_columns()
+        
+        # Объединяем все колонки
+        all_columns = base_columns + additional_columns
+        
+        self.tree = ttk.Treeview(parent, columns=all_columns, show="headings", style="Custom.Treeview")
 
         # Настройка колонок с улучшенными заголовками
         column_config = {
@@ -176,7 +183,11 @@ class AttackTable:
             "Created": {"width": 110, "anchor": "center"}
         }
 
-        for col in columns:
+        # Добавляем конфигурацию для дополнительных колонок
+        for col in additional_columns:
+            column_config[col] = {"width": 120, "anchor": "center"}
+
+        for col in all_columns:
             self.tree.heading(col, text=col)
             self.tree.column(col, **column_config[col])
 
@@ -190,6 +201,36 @@ class AttackTable:
 
         # Привязка событий ТОЛЬКО для выбора строки
         self.tree.bind("<<TreeviewSelect>>", self.on_row_select)
+
+    def get_additional_columns(self):
+        """Получение списка дополнительных колонок из структуры таблицы"""
+        try:
+            # Получаем структуру таблицы attacks
+            conn = self.app.api_client.db.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("PRAGMA table_info(attacks)")
+            columns_info = cursor.fetchall()
+            conn.close()
+            
+            # Базовые колонки, которые уже отображаются
+            base_columns_set = {
+                'id', 'name', 'frequency', 'danger', 'attack_type', 
+                'source_ips', 'affected_ports', 'targets', 'created_at'
+            }
+            
+            # Ищем дополнительные колонки
+            additional_columns = []
+            for col_info in columns_info:
+                col_name = col_info[1]
+                if col_name not in base_columns_set:
+                    additional_columns.append(col_name)
+            
+            return tuple(additional_columns)
+            
+        except Exception as e:
+            print(f"Error getting additional columns: {e}")
+            return ()
 
     def on_frequency_filter_change(self, choice):
         """Обработка изменения фильтра по частоте"""
@@ -312,7 +353,7 @@ class AttackTable:
         self.status_label.configure(text=f"✅ Loaded {len(attacks)} attacks")
 
     def update_table_content(self):
-        """Обновление содержимого таблицы"""
+        """Обновление содержимого таблицы с учетом всех колонок"""
         if not self.tree:
             return
 
@@ -322,6 +363,10 @@ class AttackTable:
 
         self.filtered_attacks = self.app.attacks.copy()
 
+        # Получаем список всех колонок
+        all_columns = self.tree["columns"]
+        base_columns_count = 8  # Количество базовых колонок
+
         # Заполняем данными с проверкой структуры
         for attack in self.filtered_attacks:
             try:
@@ -330,7 +375,7 @@ class AttackTable:
                     print(f"Warning: Skipping non-dict attack: {attack}")
                     continue
 
-                # Безопасное извлечение данных с значениями по умолчанию
+                # Базовые данные
                 name = attack.get("name", "Unknown")
                 frequency = attack.get("frequency", "unknown")
                 danger = attack.get("danger", "unknown")
@@ -358,27 +403,22 @@ class AttackTable:
                     targets = []
                 targets_count = len(targets)
 
-                # Форматирование даты
                 created_date = "Unknown"
                 created_at = attack.get("created_at", "")
                 if created_at:
                     try:
-                        # Пробуем разные форматы даты
                         if isinstance(created_at, str):
                             if "T" in created_at:
-                                # ISO format: 2024-01-15T10:30:00
                                 dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
                             else:
-                                # PostgreSQL timestamp format: 2024-01-15 10:30:00
                                 dt = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
                             created_date = dt.strftime("%m/%d/%Y")
                         else:
-                            created_date = str(created_at)[:10]
+                            created_date = str(created_at)[:10] if created_at else "Unknown"
                     except Exception as date_error:
                         created_date = str(created_at)[:10] if created_at else "Unknown"
 
-                # Вставляем данные в таблицу
-                item = self.tree.insert("", "end", values=(
+                row_values = [
                     name,
                     frequency.title(),
                     danger.title(),
@@ -387,9 +427,22 @@ class AttackTable:
                     ports_preview,
                     f"🎯 {targets_count}",
                     created_date
-                ), tags=(attack.get("id", ""),))
+                ]
 
-                # Добавляем цветовое кодирование для уровня опасности
+                additional_columns = all_columns[base_columns_count:]
+                for col in additional_columns:
+                    value = attack.get(col, "")
+                    if isinstance(value, list):
+                        value = ", ".join(map(str, value[:2])) + ("..." if len(value) > 2 else "")
+                    elif isinstance(value, dict):
+                        value = str(value)
+                    elif value is None:
+                        value = ""
+                    row_values.append(str(value))
+
+                item = self.tree.insert("", "end", values=tuple(row_values), 
+                                      tags=(attack.get("id", ""),))
+
                 danger_lower = str(danger).lower()
                 if danger_lower == "critical":
                     self.tree.set(item, "Danger", "🔴 Critical")
@@ -450,7 +503,6 @@ class AttackTable:
         # ОБНОВЛЯЕМ СТАТИСТИКУ В ДАШБОРДЕ И БОКОВОЙ ПАНЕЛИ
         self.app.refresh_attacks()  # Это обновит данные во всем приложении
 
-        # Обновляем таблицу
         self.refresh_table()
 
     def show_error(self, message):
