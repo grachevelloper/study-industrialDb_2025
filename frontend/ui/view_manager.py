@@ -1,4 +1,5 @@
 import customtkinter as ctk
+
 from tkinter import messagebox, filedialog
 from typing import List, Dict, Optional
 import json
@@ -866,54 +867,173 @@ class ViewManager:
             return []   
      
     def show_view_definition(self):
-        """Показать определение выбранного представления"""
+        """Show SQL definition of selected view in a readable format"""
         view_name = self.struct_view_selector_combo.get()
         if not view_name:
             messagebox.showwarning("Warning", "Please select a view")
             return
         
         try:
-            # Получаем информацию о представлении
+            # Get view definition from database
             query = "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type = 'view' AND name = ?"
-            result = self.app.api_client.execute_custom_query(query, (view_name,))
+            results = self.app.api_client.execute_custom_query(query, (view_name,))
             
-            if not result:
+            if not results or not results[0]:
                 self.structure_text.delete("1.0", "end")
                 self.structure_text.insert("1.0", 
                     f"View '{view_name}' not found in database.")
                 return
             
-            # Очищаем текстовое поле
+            # Get the view data (it's a dictionary)
+            view_data = results[0]
+            sql_definition = view_data.get('sql', '')
+            
+            # Clear the text field
             self.structure_text.delete("1.0", "end")
             
-            sql_definition = result[0][3] if len(result[0]) > 3 else 'No definition available'
+            # HEADER SECTION
+            header = f"╔══════════════════════════════════════════════════════════════════════╗\n"
+            header += f"║                         VIEW DEFINITION                             ║\n"
+            header += f"╠══════════════════════════════════════════════════════════════════════╣\n"
             
-            self.structure_text.insert("1.0", f"SQL Definition of view '{view_name}':\n\n")
-            self.structure_text.insert("end", "-" * 80 + "\n\n")
+            self.structure_text.insert("1.0", header)
             
-            # Форматируем SQL для лучшего отображения
-            formatted_sql = sql_definition.replace("CREATE VIEW", "\nCREATE VIEW")
-            formatted_sql = formatted_sql.replace("SELECT", "\nSELECT")
-            formatted_sql = formatted_sql.replace("FROM", "\nFROM")
-            formatted_sql = formatted_sql.replace("WHERE", "\nWHERE")
-            formatted_sql = formatted_sql.replace("GROUP BY", "\nGROUP BY")
-            formatted_sql = formatted_sql.replace("ORDER BY", "\nORDER BY")
-            formatted_sql = formatted_sql.replace("JOIN", "\nJOIN")
-            formatted_sql = formatted_sql.replace("ON", "\n    ON")
+            # BASIC INFO SECTION
+            info_frame = f"║  View Name: {view_name:<64} ║\n"
+            info_frame += f"║  Type:      {'view':<64} ║\n"
+            info_frame += f"║  Created:   {'N/A':<64} ║\n"
+            info_frame += f"╠══════════════════════════════════════════════════════════════════════╣\n"
             
-            self.structure_text.insert("end", formatted_sql)
+            self.structure_text.insert("end", info_frame)
             
-            # Добавляем информацию о представлении
-            self.structure_text.insert("end", f"\n\n" + "-" * 80 + "\n")
-            self.structure_text.insert("end", f"View type: view\n")
+            if not sql_definition:
+                # No SQL definition found
+                no_sql = f"║  SQL Definition: NOT AVAILABLE                                     ║\n"
+                no_sql += f"║                                                                      ║\n"
+                no_sql += f"║  Possible reasons:                                                 ║\n"
+                no_sql += f"║    • View created outside this application                          ║\n"
+                no_sql += f"║    • Database doesn't store view definitions                        ║\n"
+                no_sql += f"╚══════════════════════════════════════════════════════════════════════╝\n"
+                self.structure_text.insert("end", no_sql)
+                return
             
-            # Находим представление в списке для дополнительной информации
+            # SQL DEFINITION SECTION
+            sql_header = f"║  SQL DEFINITION:                                                   ║\n"
+            sql_header += f"╠══════════════════════════════════════════════════════════════════════╣\n"
+            
+            self.structure_text.insert("end", sql_header)
+            
+            # Format the SQL nicely
+            formatted_sql = self.format_sql_for_display(sql_definition)
+            
+            # Split SQL into lines and display with line numbers
+            sql_lines = formatted_sql.split('\n')
+            max_line_width = 70  # Maximum characters per line
+            
+            for i, line in enumerate(sql_lines, 1):
+                # Handle long lines by splitting them
+                line_parts = []
+                current_line = line
+                
+                while len(current_line) > max_line_width:
+                    # Find a good place to split (space or comma)
+                    split_pos = max_line_width
+                    for split_point in range(max_line_width - 10, max_line_width):
+                        if split_point < len(current_line) and current_line[split_point] in [' ', ',', ')', '(', '.']:
+                            split_pos = split_point + 1
+                            break
+                    
+                    line_parts.append(current_line[:split_pos])
+                    current_line = current_line[split_pos:]
+                
+                if current_line:
+                    line_parts.append(current_line)
+                
+                # Display line with line number
+                for j, part in enumerate(line_parts):
+                    if j == 0:
+                        line_num = f"{i:3}"
+                        prefix = f"║  {line_num} │ "
+                    else:
+                        prefix = "║       │ "
+                    
+                    # Add padding to make all lines same width
+                    padded_line = f"{prefix}{part:<{max_line_width + 5}}║\n"
+                    self.structure_text.insert("end", padded_line)
+            
+            # FOOTER SECTION
+            footer = f"╠══════════════════════════════════════════════════════════════════════╣\n"
+            
+            # Add additional info if available in current_views
+            additional_info = ""
             for view in self.current_views:
                 if view.get('name') == view_name:
-                    self.structure_text.insert("end", f"Rows: {view.get('row_count', 'N/A')}\n")
+                    row_count = view.get('row_count', 'N/A')
+                    additional_info += f"║  Rows:      {row_count:<64} ║\n"
+                    
+                    if 'display_name' in view and view['display_name'] != view_name:
+                        additional_info += f"║  Display:   {view.get('display_name'):<64} ║\n"
+                    
+                    if 'description' in view and view['description']:
+                        desc = view['description'][:60] + "..." if len(view['description']) > 60 else view['description']
+                        additional_info += f"║  Desc:      {desc:<64} ║\n"
+                    
                     break
+            
+            footer += additional_info if additional_info else f"║  No additional metadata available                               ║\n"
+            footer += f"╚══════════════════════════════════════════════════════════════════════╝\n"
+            self.structure_text.insert("end", footer)
+            
+            # Make text read-only
+            self.structure_text.configure(state="disabled")
             
         except Exception as e:
             self.structure_text.delete("1.0", "end")
-            self.structure_text.insert("1.0", 
-                f"Error getting definition for '{view_name}':\n{str(e)}")
+            error_msg = f"Error getting definition for '{view_name}':\n{str(e)[:100]}"
+            self.structure_text.insert("1.0", error_msg)
+            self.structure_text.configure(state="disabled")
+
+    def format_sql_for_display(self, sql_definition: str) -> str:
+        """Format SQL definition for nice display"""
+        # Remove extra whitespace
+        sql = sql_definition.strip()
+        
+        # Ensure proper spacing around keywords
+        keywords = [
+            'CREATE VIEW', 'AS', 'SELECT', 'FROM', 'WHERE', 'JOIN', 'INNER JOIN',
+            'LEFT JOIN', 'RIGHT JOIN', 'ON', 'GROUP BY', 'ORDER BY', 'HAVING',
+            'UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT'
+        ]
+        
+        for keyword in sorted(keywords, key=len, reverse=True):
+            # Add spaces around keywords
+            sql = re.sub(rf'\b{keyword}\b', f'\n{keyword}\n', sql, flags=re.IGNORECASE)
+        
+        # Clean up multiple newlines
+        sql = re.sub(r'\n\s*\n+', '\n', sql)
+        
+        # Add indentation
+        lines = sql.split('\n')
+        formatted_lines = []
+        indent_level = 0
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Decrease indent before certain keywords
+            if line.upper().startswith(('FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING')):
+                indent_level = max(0, indent_level - 1)
+            
+            # Add indentation
+            indented_line = '    ' * indent_level + line
+            formatted_lines.append(indented_line)
+            
+            # Increase indent after certain keywords
+            if line.upper().startswith(('SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY')):
+                indent_level += 1
+            elif line.upper().startswith('ON'):
+                indent_level += 1
+        
+        return '\n'.join(formatted_lines)

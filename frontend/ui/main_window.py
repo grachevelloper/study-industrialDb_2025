@@ -14,63 +14,63 @@ class MainWindow:
         self.setup_main_window()
 
     def setup_main_window(self):
-        """Настройка главного окна с кнопками"""
+        """Setup the main window with buttons"""
         main_frame = ctk.CTkFrame(self.parent, fg_color="transparent")
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # Заголовок
+        # Title
         title_label = ctk.CTkLabel(
             main_frame,
-            text="Управление базой данных DDoS атак",
+            text="DDoS Attack Database Management",
             font=ctk.CTkFont(size=24, weight="bold")
         )
         title_label.pack(pady=(0, 30))
 
-        # Основной контейнер с навигацией и содержимым
+        # Main container with navigation and content
         self.setup_main_container(main_frame)
 
     def setup_main_container(self, parent):
-        """Настройка основного контейнера с навигацией и содержимым"""
-        # Основной фрейм с навигацией и рабочим пространством
+        """Setup main container with navigation and workspace"""
+        # Main frame with navigation and workspace
         container = ctk.CTkFrame(parent, fg_color="transparent")
         container.pack(fill="both", expand=True)
         
-        # Разделитель на навигацию и рабочую область
+        # Split into navigation and workspace
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(1, weight=1)
         
-        # Панель навигации
+        # Navigation panel
         nav_frame = ctk.CTkFrame(container, width=200, corner_radius=0)
         nav_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         nav_frame.grid_propagate(False)
         
-        # Рабочая область
+        # Workspace area
         self.workspace_frame = ctk.CTkFrame(container, fg_color="transparent")
         self.workspace_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         
-        # Настройка панели навигации
+        # Setup navigation panel
         self.setup_navigation_panel(nav_frame)
         
-        # Показать основной экран по умолчанию
+        # Show main dashboard by default
         self.show_main_dashboard()
 
     def setup_navigation_panel(self, parent):
-        """Настройка панели навигации"""
-        # Заголовок навигации
+        """Setup navigation panel"""
+        # Navigation title
         nav_label = ctk.CTkLabel(
             parent,
-            text="Навигация",
+            text="Navigation",
             font=ctk.CTkFont(size=16, weight="bold")
         )
         nav_label.pack(pady=(20, 10), padx=20, anchor="w")
         
-        # Основные разделы
+        # Main sections
         sections = [
-            ("📊 Главная", self.show_main_dashboard, "primary"),
-            ("➕ Добавить атаку", self.open_add_attack_modal, "success"),
-            ("👁️ Просмотр данных", self.open_data_view_modal, "warning"),
-            ("🔍 Расширенный поиск", self.show_advanced_search, "info"),
-            ("📋 Подзапросы", self.show_subqueries, "secondary")
+            ("📊 Dashboard", self.show_main_dashboard, "primary"),
+            ("➕ Add Attack", self.open_add_attack_modal, "success"),
+            ("👁️ View Data", self.open_data_view_modal, "warning"),
+            ("🔍 Advanced Search", self.show_advanced_search, "info"),
+            ("📋 Subqueries", self.show_subqueries, "secondary")
         ]
         
         for text, command, color in sections:
@@ -85,23 +85,23 @@ class MainWindow:
             )
             btn.pack(fill="x", padx=10, pady=2)
         
-        # Разделитель
+        # Separator
         separator = ctk.CTkFrame(parent, height=2, fg_color="gray30")
         separator.pack(fill="x", padx=20, pady=15)
         
-        # Расширенные функции (новые модули)
+        # Advanced features (new modules)
         advanced_label = ctk.CTkLabel(
             parent,
-            text="Расширенные функции",
+            text="Advanced Features",
             font=ctk.CTkFont(size=14, weight="bold")
         )
         advanced_label.pack(pady=(0, 10), padx=20, anchor="w")
         
         advanced_sections = [
-            ("📈 Группировка данных", self.show_grouping_tool, "primary"),
-            ("👁️ Представления", self.show_view_manager, "info"),
-            ("💾 Материализованные представления", self.show_materialized_view_manager, "success"),
-            ("🔗 CTE Конструктор", self.show_cte_builder, "warning")
+            ("📈 Data Grouping", self.show_grouping_tool, "primary"),
+            ("👁️ Views", self.show_view_manager, "info"),
+            ("💾 Materialized Views", self.show_materialized_view_manager, "success"),
+            ("🔗 CTE Builder", self.show_cte_builder, "warning")
         ]
         
         for text, command, color in advanced_sections:
@@ -116,21 +116,21 @@ class MainWindow:
             )
             btn.pack(fill="x", padx=10, pady=2)
         
-        # База данных
+        # Database management
         separator2 = ctk.CTkFrame(parent, height=2, fg_color="gray30")
         separator2.pack(fill="x", padx=20, pady=15)
         
         db_label = ctk.CTkLabel(
             parent,
-            text="Управление БД",
+            text="Database Management",
             font=ctk.CTkFont(size=14, weight="bold")
         )
         db_label.pack(pady=(0, 10), padx=20, anchor="w")
         
-        # Кнопка создания схемы
+        # Create schema button
         ctk.CTkButton(
             parent,
-            text="🛠️ Создать схему БД",
+            text="🛠️ Create Database Schema",
             command=self.create_schema,
             fg_color=self.app.colors["primary"],
             hover_color=self.app.colors["primary_hover"],
@@ -138,89 +138,89 @@ class MainWindow:
             height=35
         ).pack(fill="x", padx=10, pady=2)
         
-        # Информация о системе
+        # System information
         self.setup_system_info(parent)
 
     def setup_system_info(self, parent):
-        """Настройка информации о системе"""
+        """Setup system information"""
         separator = ctk.CTkFrame(parent, height=2, fg_color="gray30")
         separator.pack(fill="x", padx=20, pady=15)
         
         info_frame = ctk.CTkFrame(parent, fg_color="transparent")
         info_frame.pack(fill="x", padx=10, pady=10)
         
-        # Информация о базе данных
+        # Database information
         try:
             db_info = self.app.api_client.get_database_info()
-            db_name = db_info.get('name', 'Неизвестно')
+            db_name = db_info.get('name', 'Unknown')
             db_size = db_info.get('size_mb', 0)
             
             ctk.CTkLabel(
                 info_frame,
-                text=f"📁 База: {db_name}",
+                text=f"📁 Database: {db_name}",
                 font=ctk.CTkFont(size=11)
             ).pack(anchor="w", pady=2)
             
             ctk.CTkLabel(
                 info_frame,
-                text=f"📊 Размер: {db_size:.2f} MB",
+                text=f"📊 Size: {db_size:.2f} MB",
                 font=ctk.CTkFont(size=11)
             ).pack(anchor="w", pady=2)
             
         except:
             ctk.CTkLabel(
                 info_frame,
-                text="📁 База данных не подключена",
+                text="📁 Database not connected",
                 font=ctk.CTkFont(size=11, slant="italic")
             ).pack(anchor="w", pady=2)
         
-        # Версия приложения
+        # Application version
         ctk.CTkLabel(
             info_frame,
-            text=f"⚙️ Версия: {self.app.version}",
+            text=f"⚙️ Version: {self.app.version}",
             font=ctk.CTkFont(size=11)
         ).pack(anchor="w", pady=2)
 
     def clear_workspace(self):
-        """Очистка рабочей области"""
+        """Clear workspace area"""
         for widget in self.workspace_frame.winfo_children():
             widget.destroy()
         self.current_module = None
 
     def show_main_dashboard(self):
-        """Показать главную панель"""
+        """Show main dashboard"""
         self.clear_workspace()
         
-        # Заголовок
+        # Title
         title_label = ctk.CTkLabel(
             self.workspace_frame,
-            text="Главная панель управления",
+            text="Main Control Panel",
             font=ctk.CTkFont(size=22, weight="bold")
         )
         title_label.pack(pady=(20, 10))
         
-        # Приветственное сообщение
+        # Welcome message
         welcome_frame = ctk.CTkFrame(self.workspace_frame)
         welcome_frame.pack(fill="x", padx=20, pady=10)
         
         welcome_text = """
-        Добро пожаловать в систему управления базой данных DDoS атак!
+        Welcome to DDoS Attack Database Management System!
         
-        Используйте панель навигации слева для доступа к функциям:
+        Use the navigation panel on the left to access features:
         
-        • Добавить атаку - добавление новых записей об атаках
-        • Просмотр данных - отображение и фильтрация данных
-        • Расширенный поиск - сложные запросы к базе данных
-        • Подзапросы - работа с вложенными запросами
+        • Add Attack - add new attack records
+        • View Data - display and filter data
+        • Advanced Search - complex database queries
+        • Subqueries - work with nested queries
         
-        Расширенные функции SQL:
+        Advanced SQL Features:
         
-        • Группировка данных - ROLLUP, CUBE, GROUPING SETS
-        • Представления - создание и управление VIEW
-        • Материализованные представления - оптимизация запросов
-        • CTE Конструктор - построение запросов с WITH
+        • Data Grouping - ROLLUP, CUBE, GROUPING SETS
+        • Views - create and manage VIEWs
+        • Materialized Views - query optimization
+        • CTE Builder - build queries with WITH
         
-        Для начала работы создайте схему базы данных, если это еще не сделано.
+        Start by creating database schema if not already done.
         """
         
         welcome_label = ctk.CTkLabel(
@@ -231,17 +231,17 @@ class MainWindow:
         )
         welcome_label.pack(padx=20, pady=20)
         
-        # Быстрые действия
+        # Quick actions
         self.create_quick_actions()
 
     def create_quick_actions(self):
-        """Создание быстрых действий на главной панели"""
+        """Create quick actions on main dashboard"""
         quick_frame = ctk.CTkFrame(self.workspace_frame)
         quick_frame.pack(fill="x", padx=20, pady=20)
         
         ctk.CTkLabel(
             quick_frame,
-            text="Быстрые действия:",
+            text="Quick Actions:",
             font=ctk.CTkFont(size=16, weight="bold")
         ).pack(anchor="w", padx=20, pady=(20, 10))
         
@@ -249,10 +249,10 @@ class MainWindow:
         actions_frame.pack(fill="x", padx=20, pady=(0, 20))
         
         actions = [
-            ("➕ Добавить атаку", self.open_add_attack_modal, "success"),
-            ("👁️ Просмотреть данные", self.open_data_view_modal, "warning"),
-            ("🛠️ Создать схему", self.create_schema, "primary"),
-            ("📊 Группировка", self.show_grouping_tool, "info")
+            ("➕ Add Attack", self.open_add_attack_modal, "success"),
+            ("👁️ View Data", self.open_data_view_modal, "warning"),
+            ("🛠️ Create Schema", self.create_schema, "primary"),
+            ("📊 Data Grouping", self.show_grouping_tool, "info")
         ]
         
         for i, (text, command, color) in enumerate(actions):
@@ -271,87 +271,85 @@ class MainWindow:
         actions_frame.grid_rowconfigure(1, weight=1)
 
     def show_grouping_tool(self):
-        """Показать инструмент группировки"""
+        """Show data grouping tool"""
         self.clear_workspace()
         self.current_module = GroupingTool(self.workspace_frame, self.app)
-        self.app.logger.log_info("Открыт инструмент группировки данных")
+        self.app.logger.log_info("Data grouping tool opened")
 
     def show_view_manager(self):
-        """Показать менеджер представлений"""
+        """Show view manager"""
         self.clear_workspace()
         self.current_module = ViewManager(self.workspace_frame, self.app)
-        self.app.logger.log_info("Открыт менеджер представлений")
+        self.app.logger.log_info("View manager opened")
 
     def show_materialized_view_manager(self):
-        """Показать менеджер материализованных представлений"""
+        """Show materialized view manager"""
         self.clear_workspace()
         self.current_module = MaterializedViewManager(self.workspace_frame, self.app)
-        self.app.logger.log_info("Открыт менеджер материализованных представлений")
+        self.app.logger.log_info("Materialized view manager opened")
 
     def show_cte_builder(self):
-        """Показать конструктор CTE"""
+        """Show CTE builder"""
         self.clear_workspace()
         self.current_module = CTEBuilder(self.workspace_frame, self.app)
-        self.app.logger.log_info("Открыт конструктор CTE")
+        self.app.logger.log_info("CTE builder opened")
 
     def show_advanced_search(self):
-        """Показать расширенный поиск"""
+        """Show advanced search"""
         self.clear_workspace()
-        # Здесь будет интеграция с существующим модулем расширенного поиска
-        # Временно показываем заглушку
+        # Placeholder for advanced search module
         placeholder_label = ctk.CTkLabel(
             self.workspace_frame,
-            text="Расширенный поиск (будет реализован позже)",
+            text="Advanced Search (to be implemented)",
             font=ctk.CTkFont(size=18, weight="bold")
         )
         placeholder_label.pack(pady=50)
-        self.app.logger.log_info("Открыт расширенный поиск")
+        self.app.logger.log_info("Advanced search opened")
 
     def show_subqueries(self):
-        """Показать работу с подзапросами"""
+        """Show subqueries interface"""
         self.clear_workspace()
-        # Здесь будет интеграция с существующим модулем подзапросов
-        # Временно показываем заглушку
+        # Placeholder for subqueries module
         placeholder_label = ctk.CTkLabel(
             self.workspace_frame,
-            text="Работа с подзапросами (будет реализован позже)",
+            text="Subqueries (to be implemented)",
             font=ctk.CTkFont(size=18, weight="bold")
         )
         placeholder_label.pack(pady=50)
-        self.app.logger.log_info("Открыта работа с подзапросами")
+        self.app.logger.log_info("Subqueries opened")
 
     def create_schema(self):
-        """Создание схемы БД"""
+        """Create database schema"""
         try:
-            self.app.logger.log_info("Создание схемы базы данных...")
+            self.app.logger.log_info("Creating database schema...")
             result = self.app.api_client.initialize_database()
 
             if result.get('success') or result.get('status') == 'already_exists':
                 self.app.logger.log_database_operation("CREATE_SCHEMA", True)
                 if result.get('status') == 'already_exists':
-                    self.app.show_success("Таблицы уже существуют в базе данных!")
+                    self.app.show_success("Tables already exist in the database!")
                 else:
-                    self.app.show_success("Схема базы данных успешно создана!")
+                    self.app.show_success("Database schema created successfully!")
             else:
                 self.app.logger.log_database_operation("CREATE_SCHEMA", False)
-                self.app.show_error("Не удалось создать схему базы данных")
+                self.app.show_error("Failed to create database schema")
 
         except Exception as e:
-            # Если таблицы уже существуют - это не ошибка
+            # If tables already exist - not an error
             if "409" in str(e) or "already exists" in str(e).lower():
                 self.app.logger.log_database_operation("CREATE_SCHEMA", True)
-                self.app.show_success("Таблицы уже существуют в базе данных!")
+                self.app.show_success("Tables already exist in the database!")
             else:
-                self.app.logger.log_error(f"Ошибка создания схемы БД: {e}")
+                self.app.logger.log_error(f"Database schema creation error: {e}")
                 self.app.logger.log_database_operation("CREATE_SCHEMA", False)
-                self.app.show_error(f"Ошибка создания схемы: {e}")
+                self.app.show_error(f"Schema creation error: {e}")
 
     def open_add_attack_modal(self):
-        """Открытие модального окна добавления новой атаки"""
-        self.app.logger.log_info("Открытие модального окна добавления атаки")
+        """Open modal window for adding new attack"""
+        self.app.logger.log_info("Opening add attack modal")
         AddAttackModal(self.parent, self.app)
 
     def open_data_view_modal(self):
-        """Открытие модального окна просмотра данных"""
-        self.app.logger.log_info("Открытие модального окна просмотра данных")
+        """Open modal window for viewing data"""
+        self.app.logger.log_info("Opening data view modal")
         DataViewModal(self.parent, self.app)
