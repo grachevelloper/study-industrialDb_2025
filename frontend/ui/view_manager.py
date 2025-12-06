@@ -1,6 +1,5 @@
-# ui/view_manager.py
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from typing import List, Dict, Optional
 import json
 import re
@@ -48,6 +47,91 @@ class ViewManager:
 
         # Загружаем список представлений при запуске
         self.load_views_list()
+    
+    def load_views_list(self):
+        try:
+            # Вместо использования get_all_views(), выполняем запрос напрямую
+            query = """
+            SELECT name, type, tbl_name, sql 
+            FROM sqlite_master 
+            WHERE type = 'view'
+            ORDER BY name
+            """
+            
+            results = self.app.api_client.execute_custom_query(query)
+            self.current_views = []
+            
+            # Очищаем контейнер
+            for widget in self.views_container.winfo_children():
+                widget.destroy()
+            
+            if not results:
+                # Нет представлений
+                no_views_label = ctk.CTkLabel(self.views_container, 
+                                            text="No views found in database",
+                                            font=ctk.CTkFont(size=12, slant="italic"))
+                no_views_label.pack(pady=20)
+                self.view_selector_combo.configure(values=[])
+                self.struct_view_selector_combo.configure(values=[])
+                return
+            
+            for i, row in enumerate(results):
+                view_name = row[0]
+                view_type = row[1]
+                table_name = row[2]
+                sql_definition = row[3] if row[3] else ""
+                
+                try:
+                    count_result = self.app.api_client.execute_custom_query(
+                        f"SELECT COUNT(*) FROM `{view_name}`"
+                    )
+                    row_count = count_result[0][0] if count_result and count_result[0] else 0
+                except:
+                    row_count = 0
+                
+                view_frame = ctk.CTkFrame(self.views_container, fg_color="transparent")
+                view_frame.pack(fill="x", pady=5, padx=5)
+                
+                name_label = ctk.CTkLabel(view_frame, text=view_name, width=200,
+                                        anchor="w", font=ctk.CTkFont(size=12))
+                name_label.grid(row=0, column=0, padx=5, sticky="w")
+                
+                count_label = ctk.CTkLabel(view_frame, text=str(row_count), width=80,
+                                        anchor="w")
+                count_label.grid(row=0, column=1, padx=5, sticky="w")
+                
+                actions_frame = ctk.CTkFrame(view_frame, fg_color="transparent")
+                actions_frame.grid(row=0, column=2, padx=5, sticky="w")
+                
+                view_btn = ctk.CTkButton(actions_frame, text="View Data", width=80,
+                                    command=lambda vn=view_name: self.view_view_data(vn))
+                view_btn.pack(side="left", padx=2)
+                
+                delete_btn = ctk.CTkButton(actions_frame, text="Delete", width=60,
+                                        command=lambda vn=view_name: self.delete_view(vn),
+                                        fg_color="#ff6b6b")
+                delete_btn.pack(side="left", padx=2)
+                
+                self.current_views.append({
+                    'name': view_name,
+                    'type': view_type,
+                    'table_name': table_name,
+                    'sql': sql_definition,
+                    'row_count': row_count
+                })
+            
+            view_names = [view['name'] for view in self.current_views]
+            self.view_selector_combo.configure(values=view_names)
+            self.struct_view_selector_combo.configure(values=view_names)
+            
+            if view_names:
+                self.view_selector_combo.set(view_names[0])
+                self.struct_view_selector_combo.set(view_names[0])
+            
+            self.app.window.title(f"DDoS Attack Manager - {len(results)} views loaded")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load views: {str(e)[:100]}")
 
     def setup_views_list_tab(self):
         """Настройка вкладки списка представлений"""
@@ -225,16 +309,9 @@ class ViewManager:
     def load_views_list(self):
         """Загрузка списка представлений из БД"""
         try:
-            # Получаем список представлений из SQLite
-            query = """
-            SELECT name, type, tbl_name, sql 
-            FROM sqlite_master 
-            WHERE type = 'view'
-            ORDER BY name
-            """
-            
-            results = self.app.api_client.execute_custom_query(query)
-            self.current_views = []
+            # Используем метод из DatabaseManager
+            results = self.app.api_client.get_all_views()
+            self.current_views = results
             
             # Очищаем контейнер
             for widget in self.views_container.winfo_children():
@@ -251,21 +328,10 @@ class ViewManager:
                 return
             
             # Заполняем список
-            for i, row in enumerate(results):
-                view_name = row[0]
-                view_type = row[1]
-                table_name = row[2]
-                sql_definition = row[3] if row[3] else ""
-                
-                # Получаем количество строк (безопасно)
-                try:
-                    # Используем параметризованный запрос для безопасности
-                    count_result = self.app.api_client.execute_custom_query(
-                        f"SELECT COUNT(*) FROM `{view_name}`"
-                    )
-                    row_count = count_result[0][0] if count_result and count_result[0] else 0
-                except Exception as count_error:
-                    print(f"Error counting rows for {view_name}: {count_error}")
+            for i, view in enumerate(results):
+                view_name = view.get('name', '')
+                row_count = view.get('row_count', 0)
+                if row_count is None:
                     row_count = 0
                 
                 # Создаем фрейм для каждого представления
@@ -296,18 +362,9 @@ class ViewManager:
                                          command=lambda vn=view_name: self.delete_view(vn),
                                          fg_color="#ff6b6b")
                 delete_btn.pack(side="left", padx=2)
-                
-                # Сохраняем для использования
-                self.current_views.append({
-                    'name': view_name,
-                    'type': view_type,
-                    'table_name': table_name,
-                    'sql': sql_definition,
-                    'row_count': row_count
-                })
             
             # Обновляем комбобоксы
-            view_names = [view['name'] for view in self.current_views]
+            view_names = [view.get('name', '') for view in results]
             self.view_selector_combo.configure(values=view_names)
             self.struct_view_selector_combo.configure(values=view_names)
             
@@ -398,32 +455,38 @@ class ViewManager:
         
         # Проверяем, не существует ли уже такое представление
         for view in self.current_views:
-            if view['name'].lower() == view_name.lower():
+            if view.get('name', '').lower() == view_name.lower():
                 if not messagebox.askyesno("View Exists", 
                                           f"View '{view_name}' already exists. Replace it?"):
                     return
                 # Удаляем существующее представление
                 try:
-                    self.app.api_client.execute_custom_query(f"DROP VIEW IF EXISTS `{view_name}`")
+                    self.app.api_client.drop_view(view_name)
                 except:
                     pass
                 break
         
-        # Формируем SQL для создания представления
-        create_sql = f"CREATE VIEW `{view_name}` AS\n{sql}"
-        
         try:
-            # Выполняем создание представления
-            self.app.api_client.execute_custom_query(create_sql)
+            # Используем метод create_view из DatabaseManager
+            success = self.app.api_client.create_view(
+                view_name=view_name,
+                query=sql,
+                view_type='REGULAR',
+                is_materialized=False,
+                description=''
+            )
             
-            # Обновляем список представлений
-            self.load_views_list()
-            
-            # Очищаем форму
-            self.clear_create_form()
-            
-            messagebox.showinfo("Success", 
-                f"View '{view_name}' created successfully!\n\nYou can now use it in queries like:\nSELECT * FROM `{view_name}`")
+            if success:
+                # Обновляем список представлений
+                self.load_views_list()
+                
+                # Очищаем форму
+                self.clear_create_form()
+                
+                messagebox.showinfo("Success", 
+                    f"View '{view_name}' created successfully!\n\nYou can now use it in queries like:\nSELECT * FROM `{view_name}`")
+            else:
+                messagebox.showerror("Error", f"Failed to create view '{view_name}'")
             
         except Exception as e:
             error_msg = str(e)
@@ -453,26 +516,29 @@ class ViewManager:
             return
         
         try:
-            # Безопасное удаление
-            self.app.api_client.execute_custom_query(f"DROP VIEW IF EXISTS `{view_name}`")
+            # Используем метод drop_view из DatabaseManager
+            success = self.app.api_client.drop_view(view_name)
             
-            # Обновляем список
-            self.load_views_list()
-            
-            # Обновляем комбобоксы, если удаленное представление было выбрано
-            if self.view_selector_combo.get() == view_name:
-                if self.current_views:
-                    self.view_selector_combo.set(self.current_views[0]['name'])
-                else:
-                    self.view_selector_combo.set("")
-            
-            if self.struct_view_selector_combo.get() == view_name:
-                if self.current_views:
-                    self.struct_view_selector_combo.set(self.current_views[0]['name'])
-                else:
-                    self.struct_view_selector_combo.set("")
-            
-            messagebox.showinfo("Success", f"View '{view_name}' deleted successfully")
+            if success:
+                # Обновляем список
+                self.load_views_list()
+                
+                # Обновляем комбобоксы, если удаленное представление было выбрано
+                if self.view_selector_combo.get() == view_name:
+                    if self.current_views:
+                        self.view_selector_combo.set(self.current_views[0].get('name', ''))
+                    else:
+                        self.view_selector_combo.set("")
+                
+                if self.struct_view_selector_combo.get() == view_name:
+                    if self.current_views:
+                        self.struct_view_selector_combo.set(self.current_views[0].get('name', ''))
+                    else:
+                        self.struct_view_selector_combo.set("")
+                
+                messagebox.showinfo("Success", f"View '{view_name}' deleted successfully")
+            else:
+                messagebox.showerror("Error", f"Failed to delete view '{view_name}'")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete view: {e}")
@@ -551,8 +617,6 @@ class ViewManager:
             return
         
         try:
-            from tkinter import filedialog
-            
             file_path = filedialog.asksaveasfilename(
                 defaultextension=".csv",
                 filetypes=[
@@ -579,6 +643,7 @@ class ViewManager:
                 
                 if not results:
                     messagebox.showwarning("Warning", "No data to export")
+                    progress.destroy()
                     return
                 
                 # Экспортируем в выбранный формат
@@ -634,39 +699,71 @@ class ViewManager:
             messagebox.showerror("Error", f"Failed to export data: {str(e)[:150]}")
 
     def show_view_structure(self):
-        """Показать структуру выбранного представления"""
         view_name = self.struct_view_selector_combo.get()
         if not view_name:
             messagebox.showwarning("Warning", "Please select a view")
             return
         
         try:
-            # Получаем информацию о столбцах из PRAGMA table_info
-            # В SQLite представления ведут себя как таблицы для PRAGMA
-            structure = self.app.api_client.execute_custom_query(f"PRAGMA table_info(`{view_name}`)")
+            # Метод 1: Пробуем получить структуру через PRAGMA
+            try:
+                structure = self.app.api_client.execute_custom_query(f"PRAGMA table_info(`{view_name}`)")
+            except:
+                structure = []
+            
+            # Метод 2: Если PRAGMA не работает, анализируем запрос представления
+            if not structure:
+                # Получаем определение представления
+                query = "SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?"
+                result = self.app.api_client.execute_custom_query(query, (view_name,))
+                
+                if not result or not result[0][0]:
+                    self.structure_text.delete("1.0", "end")
+                    self.structure_text.insert("1.0", 
+                        f"No structure information available for view '{view_name}'")
+                    return
+                
+                sql_definition = result[0][0]
+                
+                # Парсим SQL для извлечения структуры
+                structure = self._parse_view_structure_from_sql(sql_definition)
             
             # Очищаем текстовое поле
             self.structure_text.delete("1.0", "end")
             
             if not structure:
                 self.structure_text.insert("1.0", 
-                    f"No structure information available for view '{view_name}'\n\n"
-                    f"Note: Some SQLite views may not return structure information.")
+                    f"Cannot determine structure for view '{view_name}'\n\n"
+                    f"This is a known limitation in SQLite for some views.\n"
+                    f"Try querying the view directly to see its columns.")
                 return
             
             # Отображаем структуру
             self.structure_text.insert("1.0", f"Structure of view '{view_name}':\n\n")
-            self.structure_text.insert("end", "Column ID | Name           | Type        | Not Null | Default Value | Primary Key\n")
-            self.structure_text.insert("end", "-" * 100 + "\n")
+            self.structure_text.insert("end", "Column Name | Type | Not Null | Default | Primary Key\n")
+            self.structure_text.insert("end", "-" * 80 + "\n")
             
             for col in structure:
-                # col[0]: cid, col[1]: name, col[2]: type, col[3]: notnull, col[4]: default, col[5]: pk
-                default_val = str(col[4]) if col[4] is not None else "NULL"
-                pk = "Yes" if col[5] else "No"
-                not_null = "Yes" if col[3] else "No"
+                # Обрабатываем разные форматы результатов
+                if isinstance(col, (tuple, list)) and len(col) >= 6:
+                    # Результат из PRAGMA table_info
+                    col_name = col[1]
+                    col_type = col[2] or 'TEXT'
+                    not_null = "Yes" if col[3] else "No"
+                    default_val = str(col[4]) if col[4] is not None else "NULL"
+                    pk = "Yes" if col[5] else "No"
+                elif isinstance(col, dict):
+                    # Результат из парсинга SQL
+                    col_name = col.get('name', 'Unknown')
+                    col_type = col.get('type', 'TEXT')
+                    not_null = col.get('not_null', 'No')
+                    default_val = col.get('default', 'NULL')
+                    pk = col.get('pk', 'No')
+                else:
+                    continue
                 
                 self.structure_text.insert("end", 
-                    f"{col[0]:9} | {col[1]:14} | {col[2]:10} | {not_null:8} | {default_val:13} | {pk:12}\n")
+                    f"{col_name:11} | {col_type:10} | {not_null:8} | {default_val:8} | {pk:12}\n")
             
             self.structure_text.insert("end", f"\nTotal columns: {len(structure)}")
             
@@ -677,6 +774,97 @@ class ViewManager:
                 f"Error getting structure for '{view_name}':\n{error_msg}\n\n"
                 f"Try using 'Show Definition' instead.")
 
+    def _parse_view_structure_from_sql(self, sql_definition: str) -> List[Dict[str, str]]:
+        """Парсинг структуры из SQL определения представления"""
+        try:
+            # Извлекаем часть SELECT из определения
+            # Ищем "AS" после CREATE VIEW ... AS
+            parts = sql_definition.upper().split('AS')
+            if len(parts) < 2:
+                return []
+            
+            select_part = 'AS'.join(parts[1:]).strip()
+            
+            # Более простой метод: выполним запрос с LIMIT 0
+            # Это покажет нам столбцы без возвращения данных
+            view_name_match = re.search(r'CREATE VIEW\s+(\w+)', sql_definition, re.IGNORECASE)
+            if not view_name_match:
+                return []
+            
+            view_name = view_name_match.group(1)
+            try:
+                # Пробуем выполнить запрос с LIMIT 0
+                test_query = f"SELECT * FROM `{view_name}` LIMIT 0"
+                cursor = self.app.api_client.execute_custom_query(test_query, return_cursor=True)
+                
+                if cursor and cursor.description:
+                    columns = []
+                    for desc in cursor.description:
+                        columns.append({
+                            'name': desc[0],
+                            'type': desc[1] or 'TEXT',
+                            'not_null': 'No',  # Не можем определить из cursor
+                            'default': 'NULL',
+                            'pk': 'No'
+                        })
+                    return columns
+            except:
+                pass
+            
+            # Альтернативный метод: анализируем список столбцов после SELECT
+            lines = sql_definition.upper().split('\n')
+            select_line_idx = -1
+            for i, line in enumerate(lines):
+                if 'SELECT' in line:
+                    select_line_idx = i
+                    break
+            
+            if select_line_idx == -1:
+                return []
+            
+            # Простая эвристика для извлечения столбцов
+            columns = []
+            in_select = False
+            for line in lines[select_line_idx:]:
+                if 'SELECT' in line:
+                    in_select = True
+                    line = line[line.find('SELECT') + 6:].strip()
+                
+                if 'FROM' in line and in_select:
+                    line = line[:line.find('FROM')].strip()
+                    in_select = False
+                
+                # Разбиваем по запятым для получения столбцов
+                if in_select:
+                    # Убираем комментарии
+                    line = re.sub(r'--.*$', '', line)
+                    parts = line.split(',')
+                    for part in parts:
+                        part = part.strip()
+                        if part and not part.startswith('FROM'):
+                            # Извлекаем имя столбца (после AS или перед AS)
+                            if ' AS ' in part.upper():
+                                col_parts = part.upper().split(' AS ')
+                                col_name = col_parts[1].strip().strip('"').strip("'").strip('`')
+                            else:
+                                # Берем последнюю часть после точки или как есть
+                                col_name = part.split('.')[-1].strip().strip('"').strip("'").strip('`')
+                            
+                            if col_name and col_name not in ['', 'SELECT', 'FROM']:
+                                columns.append({
+                                    'name': col_name,
+                                    'type': 'TEXT',  # По умолчанию
+                                    'not_null': 'No',
+                                    'default': 'NULL',
+                                    'pk': 'No'
+                                })
+            
+            return columns
+            
+        except Exception as e:
+            print(f"Error parsing view structure: {e}")
+            return []   
+     
     def show_view_definition(self):
         """Показать определение выбранного представления"""
         view_name = self.struct_view_selector_combo.get()
@@ -684,42 +872,48 @@ class ViewManager:
             messagebox.showwarning("Warning", "Please select a view")
             return
         
-        # Находим представление в списке
-        view_info = None
-        for view in self.current_views:
-            if view['name'] == view_name:
-                view_info = view
-                break
-        
-        if not view_info:
+        try:
+            # Получаем информацию о представлении
+            query = "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type = 'view' AND name = ?"
+            result = self.app.api_client.execute_custom_query(query, (view_name,))
+            
+            if not result:
+                self.structure_text.delete("1.0", "end")
+                self.structure_text.insert("1.0", 
+                    f"View '{view_name}' not found in database.")
+                return
+            
+            # Очищаем текстовое поле
+            self.structure_text.delete("1.0", "end")
+            
+            sql_definition = result[0][3] if len(result[0]) > 3 else 'No definition available'
+            
+            self.structure_text.insert("1.0", f"SQL Definition of view '{view_name}':\n\n")
+            self.structure_text.insert("end", "-" * 80 + "\n\n")
+            
+            # Форматируем SQL для лучшего отображения
+            formatted_sql = sql_definition.replace("CREATE VIEW", "\nCREATE VIEW")
+            formatted_sql = formatted_sql.replace("SELECT", "\nSELECT")
+            formatted_sql = formatted_sql.replace("FROM", "\nFROM")
+            formatted_sql = formatted_sql.replace("WHERE", "\nWHERE")
+            formatted_sql = formatted_sql.replace("GROUP BY", "\nGROUP BY")
+            formatted_sql = formatted_sql.replace("ORDER BY", "\nORDER BY")
+            formatted_sql = formatted_sql.replace("JOIN", "\nJOIN")
+            formatted_sql = formatted_sql.replace("ON", "\n    ON")
+            
+            self.structure_text.insert("end", formatted_sql)
+            
+            # Добавляем информацию о представлении
+            self.structure_text.insert("end", f"\n\n" + "-" * 80 + "\n")
+            self.structure_text.insert("end", f"View type: view\n")
+            
+            # Находим представление в списке для дополнительной информации
+            for view in self.current_views:
+                if view.get('name') == view_name:
+                    self.structure_text.insert("end", f"Rows: {view.get('row_count', 'N/A')}\n")
+                    break
+            
+        except Exception as e:
             self.structure_text.delete("1.0", "end")
             self.structure_text.insert("1.0", 
-                f"Definition not found for '{view_name}'\n"
-                f"Try refreshing the views list.")
-            return
-        
-        # Отображаем определение
-        self.structure_text.delete("1.0", "end")
-        
-        sql_definition = view_info.get('sql', 'No definition available')
-        
-        self.structure_text.insert("1.0", f"SQL Definition of view '{view_name}':\n\n")
-        self.structure_text.insert("end", "-" * 80 + "\n\n")
-        
-        # Форматируем SQL для лучшего отображения
-        formatted_sql = sql_definition.replace("CREATE VIEW", "\nCREATE VIEW")
-        formatted_sql = formatted_sql.replace("SELECT", "\nSELECT")
-        formatted_sql = formatted_sql.replace("FROM", "\nFROM")
-        formatted_sql = formatted_sql.replace("WHERE", "\nWHERE")
-        formatted_sql = formatted_sql.replace("GROUP BY", "\nGROUP BY")
-        formatted_sql = formatted_sql.replace("ORDER BY", "\nORDER BY")
-        formatted_sql = formatted_sql.replace("JOIN", "\nJOIN")
-        formatted_sql = formatted_sql.replace("ON", "\n    ON")
-        
-        self.structure_text.insert("end", formatted_sql)
-        
-        # Добавляем информацию о представлении
-        self.structure_text.insert("end", f"\n\n" + "-" * 80 + "\n")
-        self.structure_text.insert("end", f"View type: {view_info.get('type', 'view')}\n")
-        self.structure_text.insert("end", f"Base table: {view_info.get('table_name', 'N/A')}\n")
-        self.structure_text.insert("end", f"Rows: {view_info.get('row_count', 'N/A')}\n")
+                f"Error getting definition for '{view_name}':\n{str(e)}")

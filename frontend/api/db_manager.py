@@ -10,8 +10,7 @@ class DatabaseManager:
     def __init__(self, config=None):
         self.config = config or db_config
         self.db_path = Path(__file__).parent.parent / self.config.database
-        self.db_type = "sqlite"  # Для совместимости с query_builder
-
+        self.db_type = "sqlite"  
     def get_connection(self):
         """Получение соединения с SQLite"""
         conn = sqlite3.connect(str(self.db_path))

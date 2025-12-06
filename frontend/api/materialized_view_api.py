@@ -1,9 +1,3 @@
-# api/materialized_view_api.py
-"""
-Специализированный API для работы с материализованными представлениями.
-Расширяет функционал ViewAPI специфичными для материализованных представлений операциями.
-"""
-
 import json
 import re
 from typing import List, Dict, Any, Optional, Tuple, Union

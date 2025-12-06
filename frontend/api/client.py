@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import uuid
 import json
 from datetime import datetime
@@ -116,7 +116,6 @@ class DDOSDatabaseClient:
             return data
         else:
             return []
-
 
     def create_custom_type(self, name: str, type_class: str, values: Any) -> Dict[str, Any]:
         """Создание пользовательского типа"""
@@ -248,11 +247,11 @@ class DDOSDatabaseClient:
             print(f"Error getting tables: {e}")
             return []
         
-    def get_database_info(self):
+    def get_database_info(self) -> Dict[str, Any]:
         """Получить информацию о базе данных"""
         try:
-            # Используем метод из обновленного db_manager
-            return self.db_manager.get_database_info()
+            # Используем метод из db_manager
+            return self.db.get_database_info()
         except Exception as e:
             # Возвращаем базовую информацию при ошибке
             return {
@@ -266,3 +265,126 @@ class DDOSDatabaseClient:
                 'target_count': 0,
                 'last_updated': datetime.now().isoformat()
             }
+
+    # НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С ПРЕДСТАВЛЕНИЯМИ
+    # =========================================
+
+    def get_all_views(self) -> List[Dict[str, Any]]:
+        """Получение всех представлений"""
+        try:
+            return self.db.get_all_views()
+        except Exception as e:
+            print(f"Error getting views: {e}")
+            return []
+
+    def create_view(self, view_name: str, query: str, **kwargs) -> bool:
+        """Создание представления"""
+        try:
+            return self.db.create_view(
+                view_name=view_name,
+                query=query,
+                view_type=kwargs.get('view_type', 'REGULAR'),
+                is_materialized=kwargs.get('is_materialized', False),
+                refresh_option=kwargs.get('refresh_option'),
+                description=kwargs.get('description'),
+                tags=kwargs.get('tags')
+            )
+        except Exception as e:
+            print(f"Error creating view: {e}")
+            return False
+
+    def drop_view(self, view_name: str) -> bool:
+        """Удаление представления"""
+        try:
+            return self.db.drop_view(view_name)
+        except Exception as e:
+            print(f"Error dropping view: {e}")
+            return False
+
+    def get_view_data(self, view_name: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """Получение данных из представления"""
+        try:
+            query = f"SELECT * FROM `{view_name}` LIMIT {limit}"
+            results = self.db.execute_custom_query(query)
+            
+            # Преобразуем в список словарей
+            data = []
+            for row in results:
+                if hasattr(row, '_asdict'):
+                    data.append(row._asdict())
+                elif isinstance(row, tuple):
+                    data.append({f"col_{i}": val for i, val in enumerate(row)})
+                else:
+                    data.append({"data": str(row)})
+            return data
+        except Exception as e:
+            print(f"Error getting view data: {e}")
+            return []
+
+    def save_cte_definition(self, name: str, query: str, **kwargs) -> bool:
+        """Сохранение определения CTE"""
+        try:
+            return self.db.save_cte_definition(
+                name=name,
+                query=query,
+                cte_type=kwargs.get('cte_type', 'REGULAR'),
+                description=kwargs.get('description'),
+                tags=kwargs.get('tags')
+            )
+        except Exception as e:
+            print(f"Error saving CTE definition: {e}")
+            return False
+
+    def get_all_cte_definitions(self) -> List[Dict[str, Any]]:
+        """Получение всех CTE определений"""
+        try:
+            return self.db.get_all_cte_definitions()
+        except Exception as e:
+            print(f"Error getting CTE definitions: {e}")
+            return []
+
+    # Дополнительные методы для совместимости
+    # ======================================
+
+    def save_query_execution(self, query_type: str, query_text: str, 
+                            execution_time_ms: int, row_count: int, 
+                            success: bool, error_message: str = None, 
+                            executed_by: str = None, parameters: Dict = None):
+        """Сохранение истории выполнения запроса"""
+        try:
+            self.db.save_query_execution(
+                query_type=query_type,
+                query_text=query_text,
+                execution_time_ms=execution_time_ms,
+                row_count=row_count,
+                success=success,
+                error_message=error_message,
+                executed_by=executed_by,
+                parameters=parameters
+            )
+        except Exception as e:
+            print(f"Error saving query execution: {e}")
+
+    def get_query_execution_stats(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Получение статистики выполнения запросов"""
+        try:
+            return self.db.get_query_execution_stats(limit)
+        except Exception as e:
+            print(f"Error getting query execution stats: {e}")
+            return []
+
+    def get_table_columns(self, table_name: str = "attacks") -> List[str]:
+        """Получение списка столбцов таблицы"""
+        try:
+            return self.db.get_table_columns(table_name)
+        except Exception as e:
+            print(f"Error getting table columns: {e}")
+            return []
+
+    def execute_grouping_query(self, query: str) -> List[Dict[str, Any]]:
+        """Выполнение запроса с группировкой"""
+        try:
+            return self.db.execute_grouping_query(query)
+        except Exception as e:
+            print(f"Error executing grouping query: {e}")
+            return []
